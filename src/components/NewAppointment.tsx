@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -105,10 +104,27 @@ const NewAppointment = () => {
     setParticipants(participants.filter((_, i) => i !== index));
   };
 
-  // New function to send appointment data to webhook
   const sendToWebhook = async (appointmentData: any) => {
     try {
       const webhookUrl = 'https://kumar688.app.n8n.cloud/webhook-test/karthik';
+      
+      const structuredData = {
+        title: appointmentData.title,
+        description: appointmentData.description || "",
+        date: appointmentData.date,
+        startTime: appointmentData.startTime,
+        endTime: appointmentData.endTime,
+        formattedStartTime: appointmentData.formattedStartTime,
+        formattedEndTime: appointmentData.formattedEndTime,
+        priority: appointmentData.priority,
+        isMultiPerson: appointmentData.isMultiPerson,
+        appointmentId: appointmentData.id,
+        userId: appointmentData.userId,
+        participants: appointmentData.participants.map((p: any) => ({
+          email: p.email,
+          id: p.id || null
+        }))
+      };
       
       const response = await fetch(webhookUrl, {
         method: 'POST',
@@ -116,10 +132,10 @@ const NewAppointment = () => {
           'Content-Type': 'application/json',
         },
         mode: 'no-cors', // This helps with CORS issues
-        body: JSON.stringify(appointmentData),
+        body: JSON.stringify(structuredData),
       });
       
-      console.log('Appointment data sent to webhook');
+      console.log('Structured appointment data sent to webhook:', structuredData);
       return true;
     } catch (error: any) {
       console.error('Error sending to webhook:', error);
@@ -191,21 +207,21 @@ const NewAppointment = () => {
         }
       }
 
-      // Prepare webhook data
       const webhookData = {
-        appointment: {
-          ...appointment,
-          id: appointmentData?.id,
-          formattedStartTime: new Date(startDateTime).toLocaleString(),
-          formattedEndTime: new Date(endDateTime).toLocaleString()
-        },
-        participants: participants,
-        user: {
-          id: user.id,
-        }
+        id: appointmentData?.id,
+        title: formData.title,
+        description: formData.description,
+        date: formData.date,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        formattedStartTime: new Date(startDateTime).toLocaleString(),
+        formattedEndTime: new Date(endDateTime).toLocaleString(),
+        priority: formData.priority,
+        isMultiPerson: formData.isMultiPerson,
+        userId: user.id,
+        participants: participants
       };
 
-      // Send to webhook
       const webhookSent = await sendToWebhook(webhookData);
 
       if (appointmentData) {
