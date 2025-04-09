@@ -1,1 +1,5 @@
+
 project_id = "udiukyasxnfhemmamkbj"
+
+[functions.send-reminder-email]
+verify_jwt = false

@@ -81,53 +81,20 @@ export const sendSettingsChangeNotification = async (userId: string) => {
 // Send appointment reminders based on reminder time
 export const sendAppointmentReminder = async (appointmentId: string) => {
   try {
-    // Get the appointment details
-    const { data: appointment, error: appointmentError } = await supabase
-      .from('appointments')
-      .select('*')
-      .eq('id', appointmentId)
-      .single();
+    // Call our new webhook edge function to send the reminder email
+    const { data, error } = await supabase.functions.invoke('send-reminder-email', {
+      body: { appointmentId, recipientEmail: 'drete604@gmail.com' }
+    });
     
-    if (appointmentError || !appointment) {
-      console.error("Appointment not found:", appointmentError);
+    if (error) {
+      console.error("Failed to send appointment reminder via webhook:", error);
       return false;
     }
     
-    // Get the user's notification settings
-    const { data: notificationSettings, error: settingsError } = await supabase
-      .from('notification_settings')
-      .select('*')
-      .eq('user_id', appointment.user_id)
-      .single();
-    
-    if (settingsError || !notificationSettings || !notificationSettings.push_enabled) {
-      console.log("No notification settings found or notifications disabled");
-      return false;
-    }
-    
-    // Format the appointment time for the email
-    const appointmentDateTime = new Date(appointment.start_time).toLocaleString();
-    const reminderMinutes = notificationSettings.reminder_minutes;
-    
-    // Use the default email
-    const emailToUse = 'drete604@gmail.com';
-    
-    console.log(`✉️ Reminder email would be sent to ${emailToUse}`);
-    console.log(`Subject: Reminder: Upcoming Appointment`);
-    console.log(`Body: Reminder: Your appointment "${appointment.title}" is coming up in ${reminderMinutes} minutes (${appointmentDateTime}).`);
-    
-    // In a full implementation with edge function, the code would look like:
-    // await supabase.functions.invoke('send-email', {
-    //   body: {
-    //     recipient: emailToUse,
-    //     subject: `Reminder: Upcoming Appointment`,
-    //     message: `Reminder: Your appointment "${appointment.title}" is coming up in ${reminderMinutes} minutes (${appointmentDateTime}).`
-    //   }
-    // });
-    
+    console.log("Appointment reminder sent successfully via webhook:", data);
     return true;
   } catch (error) {
-    console.error("Failed to send appointment reminder:", error);
+    console.error("Error in sendAppointmentReminder:", error);
     return false;
   }
 };

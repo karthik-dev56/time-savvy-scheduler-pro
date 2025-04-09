@@ -68,7 +68,7 @@ export function useAppointments() {
           });
           
           setAppointments(appointmentsWithParticipants);
-          // Check for reminders that need to be sent
+          // Check for reminders that need to be sent via webhook
           checkAndSendReminders();
           setLoading(false);
           return;
@@ -76,7 +76,7 @@ export function useAppointments() {
       }
       
       setAppointments(data || []);
-      // Check for reminders that need to be sent - this will use the specified email address now
+      // Check for reminders that need to be sent via webhook
       checkAndSendReminders();
     } catch (error: any) {
       console.error('Error fetching appointments:', error);
