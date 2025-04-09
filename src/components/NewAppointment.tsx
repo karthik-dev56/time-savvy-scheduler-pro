@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Appointment } from '@/types/database.types';
+import type { Appointment } from '@/types/database.types';
 
 const NewAppointment = () => {
   const { user } = useAuth();

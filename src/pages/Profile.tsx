@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Profile } from '@/types/database.types';
+import type { Profile } from '@/types/database.types';
 
 interface ProfileFormData {
   first_name: string | null;
@@ -17,7 +17,7 @@ interface ProfileFormData {
   avatar_url: string | null;
 }
 
-const Profile = () => {
+const ProfilePage = () => {
   const { user, loading } = useAuth();
   const [profile, setProfile] = useState<ProfileFormData>({
     first_name: '',
@@ -169,4 +169,4 @@ const Profile = () => {
   );
 };
 
-export default Profile;
+export default ProfilePage;
