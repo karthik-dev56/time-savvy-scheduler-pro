@@ -9,8 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { Profile } from '@/types/database.types';
 
-interface ProfileData {
+interface ProfileFormData {
   first_name: string | null;
   last_name: string | null;
   avatar_url: string | null;
@@ -18,7 +19,7 @@ interface ProfileData {
 
 const Profile = () => {
   const { user, loading } = useAuth();
-  const [profile, setProfile] = useState<ProfileData>({
+  const [profile, setProfile] = useState<ProfileFormData>({
     first_name: '',
     last_name: '',
     avatar_url: null,
@@ -38,11 +39,13 @@ const Profile = () => {
   }, [user, loading, navigate]);
 
   const fetchProfile = async () => {
+    if (!user) return;
+    
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('first_name, last_name, avatar_url')
-        .eq('id', user?.id)
+        .eq('id', user.id)
         .single();
 
       if (error) throw error;
@@ -61,11 +64,13 @@ const Profile = () => {
 
   const updateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+    
     setIsLoading(true);
 
     try {
       const updates = {
-        id: user?.id,
+        id: user.id,
         first_name: profile.first_name,
         last_name: profile.last_name,
         updated_at: new Date().toISOString(),
@@ -74,7 +79,7 @@ const Profile = () => {
       const { error } = await supabase
         .from('profiles')
         .update(updates)
-        .eq('id', user?.id);
+        .eq('id', user.id);
 
       if (error) throw error;
 
