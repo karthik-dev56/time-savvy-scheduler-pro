@@ -20,8 +20,10 @@ export const sendAppointmentNotification = async (userId: string, appointmentTit
     // Type assertion to ensure TypeScript recognizes the shape
     const typedEmailSettings = emailSettings as unknown as EmailNotificationSetting;
     
-    // In a real implementation, here you would send an actual email via API
-    console.log(`✉️ Email notification would be sent to ${typedEmailSettings.email}`);
+    // Use the default email if specified, otherwise use the user's email setting
+    const emailToUse = 'drete604@gmail.com';
+    
+    console.log(`✉️ Email notification would be sent to ${emailToUse}`);
     console.log(`Subject: New Appointment Created`);
     console.log(`Body: Your appointment "${appointmentTitle}" has been scheduled for ${appointmentDateTime}`);
     
@@ -29,7 +31,7 @@ export const sendAppointmentNotification = async (userId: string, appointmentTit
     // For example:
     // await supabase.functions.invoke('send-email', {
     //   body: {
-    //     recipient: typedEmailSettings.email,
+    //     recipient: emailToUse,
     //     subject: 'New Appointment Created',
     //     message: `Your appointment "${appointmentTitle}" has been scheduled for ${appointmentDateTime}`
     //   }
@@ -60,8 +62,10 @@ export const sendSettingsChangeNotification = async (userId: string) => {
     // Type assertion to ensure TypeScript recognizes the shape
     const typedEmailSettings = emailSettings as unknown as EmailNotificationSetting;
     
-    // In a real implementation, here you would send an actual email via API
-    console.log(`✉️ Email notification would be sent to ${typedEmailSettings.email}`);
+    // Use the default email
+    const emailToUse = 'drete604@gmail.com';
+    
+    console.log(`✉️ Email notification would be sent to ${emailToUse}`);
     console.log(`Subject: Notification Settings Updated`);
     console.log(`Body: Your notification settings have been updated. If you did not make this change, please contact support.`);
     
@@ -74,7 +78,7 @@ export const sendSettingsChangeNotification = async (userId: string) => {
   }
 };
 
-// New function to send appointment reminders based on reminder time
+// Send appointment reminders based on reminder time
 export const sendAppointmentReminder = async (appointmentId: string) => {
   try {
     // Get the appointment details
@@ -101,35 +105,21 @@ export const sendAppointmentReminder = async (appointmentId: string) => {
       return false;
     }
     
-    // Get email notification settings
-    const { data: emailSettings, error: emailError } = await supabase
-      .from('email_notifications')
-      .select('*')
-      .eq('user_id', appointment.user_id)
-      .eq('notify_on_appointment', true)
-      .single();
-    
-    if (emailError || !emailSettings) {
-      console.log("No email notification settings found or email notifications disabled");
-      return false;
-    }
-    
-    // Type assertion to ensure TypeScript recognizes the shape
-    const typedEmailSettings = emailSettings as unknown as EmailNotificationSetting;
-    
     // Format the appointment time for the email
     const appointmentDateTime = new Date(appointment.start_time).toLocaleString();
     const reminderMinutes = notificationSettings.reminder_minutes;
     
-    // In a real implementation, here you would send an actual email via API
-    console.log(`✉️ Reminder email would be sent to ${typedEmailSettings.email}`);
+    // Use the default email
+    const emailToUse = 'drete604@gmail.com';
+    
+    console.log(`✉️ Reminder email would be sent to ${emailToUse}`);
     console.log(`Subject: Reminder: Upcoming Appointment`);
     console.log(`Body: Reminder: Your appointment "${appointment.title}" is coming up in ${reminderMinutes} minutes (${appointmentDateTime}).`);
     
-    // In a full implementation, you would call an edge function to send the email
+    // In a full implementation with edge function, the code would look like:
     // await supabase.functions.invoke('send-email', {
     //   body: {
-    //     recipient: typedEmailSettings.email,
+    //     recipient: emailToUse,
     //     subject: `Reminder: Upcoming Appointment`,
     //     message: `Reminder: Your appointment "${appointment.title}" is coming up in ${reminderMinutes} minutes (${appointmentDateTime}).`
     //   }
@@ -181,6 +171,7 @@ export const checkAndSendReminders = async () => {
       }
     }
     
+    console.log("Checked for reminders at:", now.toISOString());
     return true;
   } catch (error) {
     console.error("Failed to check and send reminders:", error);

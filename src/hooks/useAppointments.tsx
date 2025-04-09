@@ -68,7 +68,7 @@ export function useAppointments() {
           });
           
           setAppointments(appointmentsWithParticipants);
-          // Also check for reminders that need to be sent
+          // Check for reminders that need to be sent
           checkAndSendReminders();
           setLoading(false);
           return;
@@ -76,7 +76,7 @@ export function useAppointments() {
       }
       
       setAppointments(data || []);
-      // Also check for reminders that need to be sent
+      // Check for reminders that need to be sent - this will use the specified email address now
       checkAndSendReminders();
     } catch (error: any) {
       console.error('Error fetching appointments:', error);
