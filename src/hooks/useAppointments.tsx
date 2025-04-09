@@ -5,8 +5,20 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import type { Appointment } from '@/types/database.types';
 
+export interface ParticipantInfo {
+  id: string;
+  appointment_id: string;
+  user_id: string;
+  status: string;
+  email?: string;
+}
+
+export interface AppointmentWithParticipants extends Appointment {
+  participants?: ParticipantInfo[];
+}
+
 export function useAppointments() {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentWithParticipants[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -22,6 +34,48 @@ export function useAppointments() {
         .order('start_time', { ascending: true });
 
       if (error) throw error;
+      
+      // Fetch participants for multi-person meetings
+      const multiPersonAppointments = data.filter(apt => apt.is_multi_person);
+      
+      if (multiPersonAppointments.length > 0) {
+        const appointmentIds = multiPersonAppointments.map(apt => apt.id);
+        
+        const { data: participantsData, error: participantsError } = await supabase
+          .from('participants')
+          .select('*')
+          .in('appointment_id', appointmentIds);
+          
+        if (participantsError) {
+          console.error("Error fetching participants:", participantsError);
+        } else {
+          // Group participants by appointment_id
+          const participantsByAppointment: Record<string, ParticipantInfo[]> = {};
+          
+          participantsData.forEach(participant => {
+            if (!participantsByAppointment[participant.appointment_id]) {
+              participantsByAppointment[participant.appointment_id] = [];
+            }
+            participantsByAppointment[participant.appointment_id].push(participant);
+          });
+          
+          // Add participants to their respective appointments
+          const appointmentsWithParticipants = data.map(appointment => {
+            if (participantsByAppointment[appointment.id]) {
+              return {
+                ...appointment,
+                participants: participantsByAppointment[appointment.id]
+              };
+            }
+            return appointment;
+          });
+          
+          setAppointments(appointmentsWithParticipants);
+          setLoading(false);
+          return;
+        }
+      }
+      
       setAppointments(data || []);
     } catch (error: any) {
       console.error('Error fetching appointments:', error);
@@ -50,6 +104,29 @@ export function useAppointments() {
           event: '*', 
           schema: 'public', 
           table: 'appointments' 
+        }, 
+        () => {
+          fetchAppointments();
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  // Subscribe to changes in the participants table
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('participants-changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'participants' 
         }, 
         () => {
           fetchAppointments();

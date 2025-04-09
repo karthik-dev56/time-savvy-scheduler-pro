@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, Users } from "lucide-react";
 import { format, addDays, startOfWeek, eachDayOfInterval, parseISO, isSameDay } from 'date-fns';
 import { useAppointments } from '@/hooks/useAppointments';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -55,7 +55,11 @@ const AppointmentCalendar = () => {
     });
   };
 
-  const getPriorityClass = (priority: string) => {
+  const getPriorityClass = (priority: string, isMultiPerson: boolean) => {
+    if (isMultiPerson) {
+      return 'bg-blue-100 text-blue-800';
+    }
+    
     switch (priority) {
       case 'high': return 'bg-red-100 text-red-800';
       case 'urgent': return 'bg-red-200 text-red-900';
@@ -127,13 +131,23 @@ const AppointmentCalendar = () => {
                         dayAppointments.map((apt) => (
                           <div 
                             key={apt.id}
-                            className={`absolute top-0 left-0 right-0 mx-1 my-1 p-2 rounded-md cursor-pointer ${getPriorityClass(apt.priority)} opacity-90 hover:opacity-100 transition-opacity`}
+                            className={`absolute top-0 left-0 right-0 mx-1 my-1 p-2 rounded-md cursor-pointer ${getPriorityClass(apt.priority, apt.is_multi_person)} opacity-90 hover:opacity-100 transition-opacity`}
                             style={{ height: 'calc(100% - 8px)' }}
                           >
-                            <div className="text-xs font-medium truncate">{apt.title}</div>
+                            <div className="flex items-center gap-1">
+                              <div className="text-xs font-medium truncate">{apt.title}</div>
+                              {apt.is_multi_person && (
+                                <Users className="h-3 w-3" />
+                              )}
+                            </div>
                             <div className="text-xs opacity-80">
                               {format(parseISO(apt.start_time), 'h:mm a')} - {format(parseISO(apt.end_time), 'h:mm a')}
                             </div>
+                            {apt.is_multi_person && apt.participants && (
+                              <div className="text-xs opacity-70 mt-1">
+                                {apt.participants.length} participant{apt.participants.length !== 1 ? 's' : ''}
+                              </div>
+                            )}
                           </div>
                         ))
                       )}

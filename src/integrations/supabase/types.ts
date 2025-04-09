@@ -15,6 +15,7 @@ export type Database = {
           description: string | null
           end_time: string
           id: string
+          is_multi_person: boolean
           priority: string
           start_time: string
           title: string
@@ -26,6 +27,7 @@ export type Database = {
           description?: string | null
           end_time: string
           id?: string
+          is_multi_person?: boolean
           priority?: string
           start_time: string
           title: string
@@ -37,6 +39,7 @@ export type Database = {
           description?: string | null
           end_time?: string
           id?: string
+          is_multi_person?: boolean
           priority?: string
           start_time?: string
           title?: string
@@ -44,6 +47,71 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      notification_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          push_enabled: boolean
+          push_token: string | null
+          reminder_minutes: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          push_enabled?: boolean
+          push_token?: string | null
+          reminder_minutes?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          push_enabled?: boolean
+          push_token?: string | null
+          reminder_minutes?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      participants: {
+        Row: {
+          appointment_id: string
+          created_at: string | null
+          id: string
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          appointment_id: string
+          created_at?: string | null
+          id?: string
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          appointment_id?: string
+          created_at?: string | null
+          id?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "participants_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

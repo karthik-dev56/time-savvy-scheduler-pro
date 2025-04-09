@@ -1,16 +1,18 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar as CalendarIcon, Clock, Users, ChevronRight, AlertTriangle, CheckCircle } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Users, ChevronRight, AlertTriangle, CheckCircle, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { useAppointments } from '@/hooks/useAppointments';
 import { formatRelative, format, parseISO, isToday, isTomorrow } from 'date-fns';
 import { Skeleton } from "@/components/ui/skeleton";
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
   const [date, setDate] = React.useState<Date | undefined>(new Date());
   const { loading, getTodaysAppointments, getUpcomingAppointments } = useAppointments();
+  const navigate = useNavigate();
   
   const todayAppointments = getTodaysAppointments();
   const upcomingAppointments = getUpcomingAppointments(3);
@@ -39,6 +41,12 @@ const Dashboard = () => {
     app => new Date(app.start_time) > new Date()
   ).length;
 
+  const multiPersonMeetings = upcomingAppointments.filter(apt => apt.is_multi_person).length;
+
+  const goToNotifications = () => {
+    navigate('/', { state: { activeTab: 'notifications' } });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -59,7 +67,7 @@ const Dashboard = () => {
               </>
             )}
             <div className="mt-4">
-              <Button variant="outline" size="sm" className="w-full">
+              <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/', { state: { activeTab: 'calendar' } })}>
                 View All
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
@@ -69,15 +77,15 @@ const Dashboard = () => {
         
         <Card className="card-hover">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <CardTitle className="text-sm font-medium">Multi-Person Meetings</CardTitle>
+            <Users className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-muted-foreground">Requires confirmation</p>
+            <div className="text-2xl font-bold">{multiPersonMeetings}</div>
+            <p className="text-xs text-muted-foreground">Upcoming meetings with participants</p>
             <div className="mt-4">
-              <Button variant="outline" size="sm" className="w-full">
-                Review
+              <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/', { state: { activeTab: 'calendar' } })}>
+                View Meetings
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -86,15 +94,15 @@ const Dashboard = () => {
         
         <Card className="card-hover">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Weekly Completion</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium">Push Notifications</CardTitle>
+            <Bell className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">87%</div>
-            <p className="text-xs text-muted-foreground">12 completed, 2 missed</p>
+            <div className="text-2xl font-bold">Enabled</div>
+            <p className="text-xs text-muted-foreground">Receive timely reminders</p>
             <div className="mt-4">
-              <Button variant="outline" size="sm" className="w-full">
-                Analytics
+              <Button variant="outline" size="sm" className="w-full" onClick={goToNotifications}>
+                Manage
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -120,7 +128,7 @@ const Dashboard = () => {
         <Card className="md:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Upcoming Appointments</CardTitle>
-            <Button variant="ghost" size="sm">View All</Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/', { state: { activeTab: 'calendar' } })}>View All</Button>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -137,12 +145,25 @@ const Dashboard = () => {
                     className={`p-3 rounded-md flex justify-between items-center ${getPriorityClass(appointment.priority)}`}
                   >
                     <div>
-                      <h4 className="font-medium">{appointment.title}</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium">{appointment.title}</h4>
+                        {appointment.is_multi_person && (
+                          <div className="bg-blue-100 text-blue-800 text-xs rounded-full px-2 py-0.5 flex items-center">
+                            <Users className="h-3 w-3 mr-1" />
+                            Group
+                          </div>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 text-sm">
                         <Clock className="h-3 w-3" />
                         <span>{formatAppointmentTime(appointment.start_time, appointment.end_time)}</span>
                         <span className="text-muted-foreground">• {formatAppointmentDate(appointment.start_time)}</span>
                       </div>
+                      {appointment.is_multi_person && appointment.participants && (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {appointment.participants.length} participant{appointment.participants.length !== 1 ? 's' : ''}
+                        </div>
+                      )}
                     </div>
                     <Button variant="ghost" size="sm">
                       <CalendarIcon className="h-4 w-4" />
@@ -166,7 +187,7 @@ const Dashboard = () => {
             <p className="text-muted-foreground mb-4">Based on your schedule and preferences, here are some recommended time slots for your next meeting:</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {["Tomorrow, 9:00 AM - 10:00 AM", "Thursday, 2:00 PM - 3:00 PM", "Friday, 11:00 AM - 12:00 PM"].map((slot, i) => (
-                <Button key={i} variant={i === 0 ? "default" : "outline"} className="justify-start">
+                <Button key={i} variant={i === 0 ? "default" : "outline"} className="justify-start" onClick={() => navigate('/', { state: { activeTab: 'new' } })}>
                   <Clock className="mr-2 h-4 w-4" />
                   {slot}
                 </Button>

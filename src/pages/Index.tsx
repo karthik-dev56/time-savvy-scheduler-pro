@@ -5,6 +5,7 @@ import Layout from '../components/Layout';
 import Dashboard from '../components/Dashboard';
 import NewAppointment from '../components/NewAppointment';
 import AppointmentCalendar from '../components/AppointmentCalendar';
+import NotificationSettings from '../components/NotificationSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Index = () => {
@@ -26,6 +27,7 @@ const Index = () => {
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="calendar">Calendar</TabsTrigger>
             <TabsTrigger value="new">New Appointment</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
           <TabsContent value="dashboard">
             <Dashboard />
@@ -35,6 +37,9 @@ const Index = () => {
           </TabsContent>
           <TabsContent value="new">
             <NewAppointment />
+          </TabsContent>
+          <TabsContent value="notifications">
+            <NotificationSettings />
           </TabsContent>
         </Tabs>
       </div>
