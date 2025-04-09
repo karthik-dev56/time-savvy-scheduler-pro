@@ -1,13 +1,15 @@
 
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/Layout";
 
 const Auth = () => {
@@ -15,6 +17,7 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"signin" | "signup">("signin");
+  const { signIn, signUp, authError } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -46,12 +49,9 @@ const Auth = () => {
     setLoading(true);
     
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+      const result = await signUp(email, password);
       
-      if (error) throw error;
+      if (!result.success) throw result.error;
       
       toast({
         title: "Account created!",
@@ -75,18 +75,32 @@ const Auth = () => {
     setLoading(true);
     
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const result = await signIn(email, password);
       
-      if (error) throw error;
+      if (!result.success) {
+        throw result.error;
+      }
+      
     } catch (error: any) {
+      console.error("Sign in error:", error);
+      
+      // Check for specific error messages
+      let errorMessage = error.message || "Invalid email or password.";
+      
+      // Special handling for common errors
+      if (errorMessage.includes("Invalid login credentials")) {
+        errorMessage = "Email or password is incorrect. Please try again.";
+      } else if (errorMessage.includes("Email not confirmed")) {
+        errorMessage = "Please verify your email address before signing in.";
+      }
+      
       toast({
         title: "Error",
-        description: error.message || "Invalid email or password.",
+        description: errorMessage,
         variant: "destructive",
       });
+      
+    } finally {
       setLoading(false);
     }
   };
@@ -126,6 +140,12 @@ const Auth = () => {
                 <TabsTrigger value="signin">Sign In</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
               </TabsList>
+              
+              {authError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>{authError}</AlertDescription>
+                </Alert>
+              )}
               
               <TabsContent value="signin">
                 <form onSubmit={handleSignIn} className="space-y-4">
