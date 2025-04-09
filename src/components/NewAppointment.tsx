@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,11 +12,32 @@ import { format } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Clock, Calendar as CalendarIcon, Plus, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 const NewAppointment = () => {
-  const [date, setDate] = React.useState<Date>();
-  const [participants, setParticipants] = React.useState<string[]>([]);
-  const [newParticipant, setNewParticipant] = React.useState("");
+  const [date, setDate] = useState<Date | undefined>();
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [newParticipant, setNewParticipant] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [bufferTime, setBufferTime] = useState("15");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const { user, loading } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (!user && !loading) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
 
   const handleAddParticipant = () => {
     if (newParticipant.trim() !== "" && !participants.includes(newParticipant)) {
@@ -27,6 +48,76 @@ const NewAppointment = () => {
 
   const handleRemoveParticipant = (participant: string) => {
     setParticipants(participants.filter(p => p !== participant));
+  };
+
+  const handleSubmit = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to create appointments",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!title || !date || !startTime || !endTime) {
+      toast({
+        title: "Missing information",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Convert date and time strings to Date objects
+      const startDateTime = new Date(date);
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      startDateTime.setHours(startHour, startMinute);
+
+      const endDateTime = new Date(date);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+      endDateTime.setHours(endHour, endMinute);
+
+      // Save the appointment to Supabase
+      const { data, error } = await supabase
+        .from('appointments')
+        .insert({
+          user_id: user.id,
+          title,
+          description,
+          start_time: startDateTime.toISOString(),
+          end_time: endDateTime.toISOString(),
+          priority
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Appointment created",
+        description: "Your appointment has been scheduled successfully."
+      });
+
+      // Reset form
+      setTitle("");
+      setDescription("");
+      setDate(undefined);
+      setStartTime("");
+      setEndTime("");
+      setPriority("medium");
+      setBufferTime("15");
+      setParticipants([]);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create appointment",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -40,7 +131,12 @@ const NewAppointment = () => {
       <CardContent className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="title">Appointment Title</Label>
-          <Input id="title" placeholder="Enter appointment title" />
+          <Input 
+            id="title" 
+            placeholder="Enter appointment title" 
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -73,7 +169,7 @@ const NewAppointment = () => {
           <div className="space-y-2">
             <Label>Time</Label>
             <div className="grid grid-cols-2 gap-2">
-              <Select>
+              <Select value={startTime} onValueChange={setStartTime}>
                 <SelectTrigger>
                   <SelectValue placeholder="Start time" />
                 </SelectTrigger>
@@ -85,7 +181,7 @@ const NewAppointment = () => {
                   ))}
                 </SelectContent>
               </Select>
-              <Select>
+              <Select value={endTime} onValueChange={setEndTime}>
                 <SelectTrigger>
                   <SelectValue placeholder="End time" />
                 </SelectTrigger>
@@ -103,7 +199,11 @@ const NewAppointment = () => {
 
         <div className="space-y-2">
           <Label>Priority Level</Label>
-          <RadioGroup defaultValue="medium" className="flex space-x-4">
+          <RadioGroup 
+            value={priority} 
+            onValueChange={setPriority} 
+            className="flex space-x-4"
+          >
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="high" id="high" />
               <Label htmlFor="high" className="text-red-600 font-medium">High</Label>
@@ -121,7 +221,7 @@ const NewAppointment = () => {
 
         <div className="space-y-2">
           <Label>Buffer Time</Label>
-          <Select defaultValue="15">
+          <Select value={bufferTime} onValueChange={setBufferTime}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -166,12 +266,20 @@ const NewAppointment = () => {
 
         <div className="space-y-2">
           <Label htmlFor="description">Description</Label>
-          <Textarea id="description" placeholder="Enter appointment details" rows={3} />
+          <Textarea 
+            id="description" 
+            placeholder="Enter appointment details" 
+            rows={3} 
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">
         <Button variant="outline">Cancel</Button>
-        <Button>Create Appointment</Button>
+        <Button onClick={handleSubmit} disabled={isSubmitting}>
+          {isSubmitting ? "Creating..." : "Create Appointment"}
+        </Button>
       </CardFooter>
     </Card>
   );
