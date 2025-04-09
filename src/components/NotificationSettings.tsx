@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,6 +17,7 @@ const NotificationSettings = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [settingId, setSettingId] = useState<string | null>(null);
   const [settings, setSettings] = useState({
     pushEnabled: true,
     reminderMinutes: 15,
@@ -44,6 +46,7 @@ const NotificationSettings = () => {
       }
       
       if (data) {
+        setSettingId(data.id);
         setSettings({
           pushEnabled: data.push_enabled,
           reminderMinutes: data.reminder_minutes,
@@ -105,15 +108,21 @@ const NotificationSettings = () => {
     try {
       setSaving(true);
       
-      const { data, error } = await supabase
+      const settingData = {
+        user_id: user.id,
+        push_enabled: settings.pushEnabled,
+        push_token: settings.pushToken,
+        reminder_minutes: settings.reminderMinutes
+      };
+      
+      // If we have an existing setting ID, use it for the upsert
+      if (settingId) {
+        settingData['id'] = settingId;
+      }
+      
+      const { error } = await supabase
         .from('notification_settings')
-        .upsert({
-          user_id: user.id,
-          push_enabled: settings.pushEnabled,
-          push_token: settings.pushToken,
-          reminder_minutes: settings.reminderMinutes
-        })
-        .select();
+        .upsert(settingData);
       
       if (error) throw error;
       
