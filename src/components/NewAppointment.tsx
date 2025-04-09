@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -104,6 +105,28 @@ const NewAppointment = () => {
     setParticipants(participants.filter((_, i) => i !== index));
   };
 
+  // New function to send appointment data to webhook
+  const sendToWebhook = async (appointmentData: any) => {
+    try {
+      const webhookUrl = 'https://kumar688.app.n8n.cloud/webhook-test/karthik';
+      
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        mode: 'no-cors', // This helps with CORS issues
+        body: JSON.stringify(appointmentData),
+      });
+      
+      console.log('Appointment data sent to webhook');
+      return true;
+    } catch (error: any) {
+      console.error('Error sending to webhook:', error);
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -168,6 +191,23 @@ const NewAppointment = () => {
         }
       }
 
+      // Prepare webhook data
+      const webhookData = {
+        appointment: {
+          ...appointment,
+          id: appointmentData?.id,
+          formattedStartTime: new Date(startDateTime).toLocaleString(),
+          formattedEndTime: new Date(endDateTime).toLocaleString()
+        },
+        participants: participants,
+        user: {
+          id: user.id,
+        }
+      };
+
+      // Send to webhook
+      const webhookSent = await sendToWebhook(webhookData);
+
       if (appointmentData) {
         const formattedDateTime = new Date(startDateTime).toLocaleString();
         await sendAppointmentNotification(user.id, formData.title, formattedDateTime);
@@ -175,7 +215,7 @@ const NewAppointment = () => {
 
       toast({
         title: "Success",
-        description: "Appointment created successfully",
+        description: `Appointment created successfully${webhookSent ? ' and notification sent' : ''}`,
       });
 
       setFormData({
