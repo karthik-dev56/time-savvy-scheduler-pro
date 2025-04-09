@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,11 +5,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { BellRing, BellOff } from 'lucide-react';
+import { BellRing, BellOff, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { NotificationSetting } from '@/types/database.types';
+import { sendSettingsChangeNotification } from '@/utils/notificationUtils';
+
+interface EmailNotificationSetting {
+  id: string;
+  user_id: string;
+  email: string;
+  notify_on_appointment: boolean;
+  notify_on_settings_change: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 const NotificationSettings = () => {
   const { user } = useAuth();
@@ -18,42 +28,75 @@ const NotificationSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settingId, setSettingId] = useState<string | null>(null);
+  const [emailSettingId, setEmailSettingId] = useState<string | null>(null);
   const [settings, setSettings] = useState({
     pushEnabled: true,
     reminderMinutes: 15,
     pushToken: null as string | null
   });
+  const [emailSettings, setEmailSettings] = useState({
+    email: '',
+    notifyOnAppointment: true,
+    notifyOnSettingsChange: true
+  });
 
   useEffect(() => {
     if (user) {
-      fetchNotificationSettings();
+      fetchSettings();
     }
   }, [user]);
 
-  const fetchNotificationSettings = async () => {
+  const fetchSettings = async () => {
     if (!user) return;
     
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // Fetch push notification settings
+      const { data: pushData, error: pushError } = await supabase
         .from('notification_settings')
         .select('*')
         .eq('user_id', user.id)
         .single();
       
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" error
-        throw error;
+      if (pushError && pushError.code !== 'PGRST116') {
+        throw pushError;
       }
       
-      if (data) {
-        setSettingId(data.id);
+      if (pushData) {
+        setSettingId(pushData.id);
         setSettings({
-          pushEnabled: data.push_enabled,
-          reminderMinutes: data.reminder_minutes,
-          pushToken: data.push_token
+          pushEnabled: pushData.push_enabled,
+          reminderMinutes: pushData.reminder_minutes,
+          pushToken: pushData.push_token
         });
       }
       
+      // Fetch email notification settings
+      const { data: emailData, error: emailError } = await supabase
+        .from('email_notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (emailError && emailError.code !== 'PGRST116') {
+        throw emailError;
+      }
+      
+      if (emailData) {
+        setEmailSettingId(emailData.id);
+        setEmailSettings({
+          email: emailData.email,
+          notifyOnAppointment: emailData.notify_on_appointment,
+          notifyOnSettingsChange: emailData.notify_on_settings_change
+        });
+      } else if (user.email) {
+        // Default to user's email if no settings found
+        setEmailSettings(prev => ({
+          ...prev,
+          email: user.email || ''
+        }));
+      }
     } catch (error: any) {
       console.error('Error fetching notification settings:', error);
       toast({
@@ -101,6 +144,16 @@ const NotificationSettings = () => {
       reminderMinutes: parseInt(value)
     }));
   };
+
+  const handleToggleEmailNotification = (type: 'appointment' | 'settings', enabled: boolean) => {
+    setEmailSettings(prev => {
+      if (type === 'appointment') {
+        return { ...prev, notifyOnAppointment: enabled };
+      } else {
+        return { ...prev, notifyOnSettingsChange: enabled };
+      }
+    });
+  };
   
   const saveSettings = async () => {
     if (!user) return;
@@ -108,28 +161,54 @@ const NotificationSettings = () => {
     try {
       setSaving(true);
       
-      const settingData = {
+      // Save push notification settings
+      const pushSettingData = {
         user_id: user.id,
         push_enabled: settings.pushEnabled,
         push_token: settings.pushToken,
         reminder_minutes: settings.reminderMinutes
       };
       
-      // If we have an existing setting ID, use it for the upsert
       if (settingId) {
-        settingData['id'] = settingId;
+        pushSettingData['id'] = settingId;
       }
       
-      const { error } = await supabase
+      const { error: pushError } = await supabase
         .from('notification_settings')
-        .upsert(settingData);
+        .upsert(pushSettingData);
       
-      if (error) throw error;
+      if (pushError) throw pushError;
+      
+      // Save email notification settings
+      const emailSettingData = {
+        user_id: user.id,
+        email: emailSettings.email || user.email,
+        notify_on_appointment: emailSettings.notifyOnAppointment,
+        notify_on_settings_change: emailSettings.notifyOnSettingsChange
+      };
+      
+      if (emailSettingId) {
+        emailSettingData['id'] = emailSettingId;
+      }
+      
+      const { error: emailError } = await supabase
+        .from('email_notifications')
+        .upsert(emailSettingData);
+      
+      if (emailError) throw emailError;
+      
+      // Send email notification about settings change if enabled
+      if (emailSettings.notifyOnSettingsChange) {
+        await sendSettingsChangeNotification(user.id);
+      }
       
       toast({
         title: "Success",
         description: "Notification settings saved",
       });
+      
+      // Refresh settings after save
+      fetchSettings();
       
     } catch (error: any) {
       console.error('Error saving notification settings:', error);
@@ -155,40 +234,79 @@ const NotificationSettings = () => {
             <Skeleton className="h-10 w-full" />
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="push-notifications">Push Notifications</Label>
-                <div className="text-sm text-muted-foreground">
-                  Receive alerts about upcoming appointments
+          <div className="space-y-8">
+            <div className="space-y-6">
+              <h3 className="text-lg font-medium">Push Notifications</h3>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="push-notifications">Push Notifications</Label>
+                  <div className="text-sm text-muted-foreground">
+                    Receive alerts about upcoming appointments
+                  </div>
                 </div>
+                <Switch
+                  id="push-notifications"
+                  checked={settings.pushEnabled}
+                  onCheckedChange={handleTogglePush}
+                />
               </div>
-              <Switch
-                id="push-notifications"
-                checked={settings.pushEnabled}
-                onCheckedChange={handleTogglePush}
-              />
+              
+              <div className="space-y-2">
+                <Label htmlFor="reminder-time">Reminder Time</Label>
+                <Select 
+                  value={settings.reminderMinutes.toString()} 
+                  onValueChange={handleReminderChange}
+                  disabled={!settings.pushEnabled}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select when to be reminded" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 minutes before</SelectItem>
+                    <SelectItem value="15">15 minutes before</SelectItem>
+                    <SelectItem value="30">30 minutes before</SelectItem>
+                    <SelectItem value="60">1 hour before</SelectItem>
+                    <SelectItem value="120">2 hours before</SelectItem>
+                    <SelectItem value="1440">1 day before</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="reminder-time">Reminder Time</Label>
-              <Select 
-                value={settings.reminderMinutes.toString()} 
-                onValueChange={handleReminderChange}
-                disabled={!settings.pushEnabled}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select when to be reminded" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">5 minutes before</SelectItem>
-                  <SelectItem value="15">15 minutes before</SelectItem>
-                  <SelectItem value="30">30 minutes before</SelectItem>
-                  <SelectItem value="60">1 hour before</SelectItem>
-                  <SelectItem value="120">2 hours before</SelectItem>
-                  <SelectItem value="1440">1 day before</SelectItem>
-                </SelectContent>
-              </Select>
+
+            <div className="space-y-6">
+              <h3 className="text-lg font-medium">Email Notifications</h3>
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="email-new-appointment">New Appointment Notifications</Label>
+                  <div className="text-sm text-muted-foreground">
+                    Receive email when a new appointment is created
+                  </div>
+                </div>
+                <Switch
+                  id="email-new-appointment"
+                  checked={emailSettings.notifyOnAppointment}
+                  onCheckedChange={(checked) => handleToggleEmailNotification('appointment', checked)}
+                />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="email-settings-change">Settings Change Notifications</Label>
+                  <div className="text-sm text-muted-foreground">
+                    Receive email when notification settings are updated
+                  </div>
+                </div>
+                <Switch
+                  id="email-settings-change"
+                  checked={emailSettings.notifyOnSettingsChange}
+                  onCheckedChange={(checked) => handleToggleEmailNotification('settings', checked)}
+                />
+              </div>
+              
+              <div className="text-sm text-muted-foreground mt-2">
+                Email notifications will be sent to: <strong>{emailSettings.email || user?.email || 'No email found'}</strong>
+              </div>
             </div>
             
             <div className="pt-4">

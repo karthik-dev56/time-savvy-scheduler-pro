@@ -39,3 +39,13 @@ export interface NotificationSetting {
   created_at: string;
   updated_at: string;
 }
+
+export interface EmailNotificationSetting {
+  id: string;
+  user_id: string;
+  email: string;
+  notify_on_appointment: boolean;
+  notify_on_settings_change: boolean;
+  created_at: string;
+  updated_at: string;
+}

@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { X, Plus, UserPlus } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Appointment } from '@/types/database.types';
+import { sendAppointmentNotification } from '@/utils/notificationUtils';
 
 const NewAppointment = () => {
   const { user } = useAuth();
@@ -165,6 +166,11 @@ const NewAppointment = () => {
             });
           }
         }
+      }
+
+      if (appointmentData) {
+        const formattedDateTime = new Date(startDateTime).toLocaleString();
+        await sendAppointmentNotification(user.id, formData.title, formattedDateTime);
       }
 
       toast({
