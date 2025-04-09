@@ -1,7 +1,9 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { checkAndSendReminders } from '@/utils/notificationUtils';
 import type { Appointment, Participant } from '@/types/database.types';
 
 export interface ParticipantInfo extends Participant {
@@ -66,12 +68,16 @@ export function useAppointments() {
           });
           
           setAppointments(appointmentsWithParticipants);
+          // Also check for reminders that need to be sent
+          checkAndSendReminders();
           setLoading(false);
           return;
         }
       }
       
       setAppointments(data || []);
+      // Also check for reminders that need to be sent
+      checkAndSendReminders();
     } catch (error: any) {
       console.error('Error fetching appointments:', error);
       toast({
