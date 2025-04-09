@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,8 +47,6 @@ const NewAppointment = () => {
         
       if (error) throw error;
       
-      // For demo purposes, we're using IDs as emails
-      // In a real app, you'd have actual email addresses
       const usersData = data.map(profile => ({
         id: profile.id,
         email: `user-${profile.id.substring(0, 8)}@example.com`
@@ -84,7 +81,6 @@ const NewAppointment = () => {
   const addParticipant = () => {
     if (!newParticipantEmail.trim()) return;
     
-    // Check if email is already in the list
     if (participants.some(p => p.email === newParticipantEmail)) {
       toast({
         title: "Warning",
@@ -94,7 +90,6 @@ const NewAppointment = () => {
       return;
     }
 
-    // Find user ID if it exists in available users
     const matchingUser = availableUsers.find(u => u.email === newParticipantEmail);
     
     setParticipants([...participants, {
@@ -122,11 +117,9 @@ const NewAppointment = () => {
     setLoading(true);
 
     try {
-      // Combine date and time values
       const startDateTime = new Date(`${formData.date}T${formData.startTime}`).toISOString();
       const endDateTime = new Date(`${formData.date}T${formData.endTime}`).toISOString();
 
-      // Validate that end time is after start time
       if (new Date(endDateTime) <= new Date(startDateTime)) {
         throw new Error("End time must be after start time");
       }
@@ -149,14 +142,14 @@ const NewAppointment = () => {
 
       if (appointmentError) throw appointmentError;
 
-      // Add participants if this is a multi-person meeting
       if (formData.isMultiPerson && participants.length > 0 && appointmentData) {
         const participantsWithIds = participants.filter(p => p.id);
         
         if (participantsWithIds.length > 0) {
           const participantsToInsert = participantsWithIds.map(p => ({
             appointment_id: appointmentData.id,
-            user_id: p.id as string
+            user_id: p.id as string,
+            status: 'pending'
           }));
 
           const { error: participantsError } = await supabase
@@ -179,7 +172,6 @@ const NewAppointment = () => {
         description: "Appointment created successfully",
       });
 
-      // Reset form
       setFormData({
         title: '',
         description: '',

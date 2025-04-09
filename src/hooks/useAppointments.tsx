@@ -1,15 +1,10 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import type { Appointment } from '@/types/database.types';
+import type { Appointment, Participant } from '@/types/database.types';
 
-export interface ParticipantInfo {
-  id: string;
-  appointment_id: string;
-  user_id: string;
-  status: string;
+export interface ParticipantInfo extends Participant {
   email?: string;
 }
 
@@ -56,7 +51,7 @@ export function useAppointments() {
             if (!participantsByAppointment[participant.appointment_id]) {
               participantsByAppointment[participant.appointment_id] = [];
             }
-            participantsByAppointment[participant.appointment_id].push(participant);
+            participantsByAppointment[participant.appointment_id].push(participant as ParticipantInfo);
           });
           
           // Add participants to their respective appointments
@@ -93,7 +88,6 @@ export function useAppointments() {
     fetchAppointments();
   }, [user]);
 
-  // Subscribe to changes in the appointments table
   useEffect(() => {
     if (!user) return;
 
@@ -116,7 +110,6 @@ export function useAppointments() {
     };
   }, [user]);
 
-  // Subscribe to changes in the participants table
   useEffect(() => {
     if (!user) return;
 

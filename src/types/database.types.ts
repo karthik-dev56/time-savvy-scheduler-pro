@@ -18,4 +18,24 @@ export interface Appointment {
   priority: string;
   created_at: string;
   updated_at: string;
+  is_multi_person: boolean;
+}
+
+export interface Participant {
+  id: string;
+  appointment_id: string;
+  user_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotificationSetting {
+  id: string;
+  user_id: string;
+  push_enabled: boolean;
+  push_token: string | null;
+  reminder_minutes: number;
+  created_at: string;
+  updated_at: string;
 }
