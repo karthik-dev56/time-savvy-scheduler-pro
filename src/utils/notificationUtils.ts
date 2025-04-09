@@ -1,5 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
+import { EmailNotificationSetting } from '@/types/database.types';
 
 export const sendAppointmentNotification = async (userId: string, appointmentTitle: string, appointmentDateTime: string) => {
   try {
@@ -16,8 +17,11 @@ export const sendAppointmentNotification = async (userId: string, appointmentTit
       return;
     }
     
+    // Type assertion to ensure TypeScript recognizes the shape
+    const typedEmailSettings = emailSettings as unknown as EmailNotificationSetting;
+    
     // In a real implementation, here you would send an actual email via API
-    console.log(`✉️ Email notification would be sent to ${emailSettings.email}`);
+    console.log(`✉️ Email notification would be sent to ${typedEmailSettings.email}`);
     console.log(`Subject: New Appointment Created`);
     console.log(`Body: Your appointment "${appointmentTitle}" has been scheduled for ${appointmentDateTime}`);
     
@@ -25,7 +29,7 @@ export const sendAppointmentNotification = async (userId: string, appointmentTit
     // For example:
     // await supabase.functions.invoke('send-email', {
     //   body: {
-    //     recipient: emailSettings.email,
+    //     recipient: typedEmailSettings.email,
     //     subject: 'New Appointment Created',
     //     message: `Your appointment "${appointmentTitle}" has been scheduled for ${appointmentDateTime}`
     //   }
@@ -53,8 +57,11 @@ export const sendSettingsChangeNotification = async (userId: string) => {
       return;
     }
     
+    // Type assertion to ensure TypeScript recognizes the shape
+    const typedEmailSettings = emailSettings as unknown as EmailNotificationSetting;
+    
     // In a real implementation, here you would send an actual email via API
-    console.log(`✉️ Email notification would be sent to ${emailSettings.email}`);
+    console.log(`✉️ Email notification would be sent to ${typedEmailSettings.email}`);
     console.log(`Subject: Notification Settings Updated`);
     console.log(`Body: Your notification settings have been updated. If you did not make this change, please contact support.`);
     

@@ -9,18 +9,8 @@ import { BellRing, BellOff, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { NotificationSetting } from '@/types/database.types';
+import { NotificationSetting, EmailNotificationSetting } from '@/types/database.types';
 import { sendSettingsChangeNotification } from '@/utils/notificationUtils';
-
-interface EmailNotificationSetting {
-  id: string;
-  user_id: string;
-  email: string;
-  notify_on_appointment: boolean;
-  notify_on_settings_change: boolean;
-  created_at: string;
-  updated_at: string;
-}
 
 const NotificationSettings = () => {
   const { user } = useAuth();
@@ -75,7 +65,7 @@ const NotificationSettings = () => {
       // Fetch email notification settings
       const { data: emailData, error: emailError } = await supabase
         .from('email_notifications')
-        .select('*')
+        .select()
         .eq('user_id', user.id)
         .single();
       
@@ -84,11 +74,13 @@ const NotificationSettings = () => {
       }
       
       if (emailData) {
-        setEmailSettingId(emailData.id);
+        // Type assertion to ensure TypeScript recognizes the shape
+        const typedEmailData = emailData as unknown as EmailNotificationSetting;
+        setEmailSettingId(typedEmailData.id);
         setEmailSettings({
-          email: emailData.email,
-          notifyOnAppointment: emailData.notify_on_appointment,
-          notifyOnSettingsChange: emailData.notify_on_settings_change
+          email: typedEmailData.email,
+          notifyOnAppointment: typedEmailData.notify_on_appointment,
+          notifyOnSettingsChange: typedEmailData.notify_on_settings_change
         });
       } else if (user.email) {
         // Default to user's email if no settings found
