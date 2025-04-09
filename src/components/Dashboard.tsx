@@ -4,16 +4,40 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar as CalendarIcon, Clock, Users, ChevronRight, AlertTriangle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { useAppointments } from '@/hooks/useAppointments';
+import { formatRelative, format, parseISO, isToday, isTomorrow } from 'date-fns';
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Dashboard = () => {
   const [date, setDate] = React.useState<Date | undefined>(new Date());
+  const { loading, getTodaysAppointments, getUpcomingAppointments } = useAppointments();
+  
+  const todayAppointments = getTodaysAppointments();
+  const upcomingAppointments = getUpcomingAppointments(3);
+  
+  const formatAppointmentDate = (dateStr: string) => {
+    const date = parseISO(dateStr);
+    if (isToday(date)) return "Today";
+    if (isTomorrow(date)) return "Tomorrow";
+    return formatRelative(date, new Date());
+  };
 
-  // Mock upcoming appointments
-  const upcomingAppointments = [
-    { id: 1, title: "Team Meeting", time: "10:00 AM - 11:00 AM", date: "Today", priority: "high" },
-    { id: 2, title: "Client Presentation", time: "2:00 PM - 3:00 PM", date: "Today", priority: "medium" },
-    { id: 3, title: "Weekly Review", time: "9:30 AM - 10:30 AM", date: "Tomorrow", priority: "low" },
-  ];
+  const formatAppointmentTime = (startStr: string, endStr: string) => {
+    return `${format(parseISO(startStr), 'h:mm a')} - ${format(parseISO(endStr), 'h:mm a')}`;
+  };
+
+  const getPriorityClass = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-100 border-l-4 border-red-500';
+      case 'urgent': return 'bg-red-200 border-l-4 border-red-600';
+      case 'low': return 'bg-blue-50 border-l-4 border-blue-400';
+      default: return 'bg-gray-50 border-l-4 border-gray-400';
+    }
+  };
+
+  const remainingAppointments = todayAppointments.filter(
+    app => new Date(app.start_time) > new Date()
+  ).length;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -24,8 +48,16 @@ const Dashboard = () => {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">5</div>
-            <p className="text-xs text-muted-foreground">3 remaining</p>
+            {loading ? (
+              <Skeleton className="h-6 w-20" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{todayAppointments.length}</div>
+                <p className="text-xs text-muted-foreground">
+                  {remainingAppointments} remaining
+                </p>
+              </>
+            )}
             <div className="mt-4">
               <Button variant="outline" size="sm" className="w-full">
                 View All
@@ -92,24 +124,34 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {upcomingAppointments.map((appointment) => (
-                <div 
-                  key={appointment.id} 
-                  className={`p-3 rounded-md flex justify-between items-center priority-${appointment.priority}`}
-                >
-                  <div>
-                    <h4 className="font-medium">{appointment.title}</h4>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Clock className="h-3 w-3" />
-                      <span>{appointment.time}</span>
-                      <span className="text-muted-foreground">• {appointment.date}</span>
-                    </div>
+              {loading ? (
+                Array(3).fill(0).map((_, i) => (
+                  <div key={i} className="p-3 rounded-md flex justify-between items-center">
+                    <Skeleton className="h-16 w-full" />
                   </div>
-                  <Button variant="ghost" size="sm">
-                    <CalendarIcon className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+                ))
+              ) : upcomingAppointments.length > 0 ? (
+                upcomingAppointments.map((appointment) => (
+                  <div 
+                    key={appointment.id} 
+                    className={`p-3 rounded-md flex justify-between items-center ${getPriorityClass(appointment.priority)}`}
+                  >
+                    <div>
+                      <h4 className="font-medium">{appointment.title}</h4>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Clock className="h-3 w-3" />
+                        <span>{formatAppointmentTime(appointment.start_time, appointment.end_time)}</span>
+                        <span className="text-muted-foreground">• {formatAppointmentDate(appointment.start_time)}</span>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm">
+                      <CalendarIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-muted-foreground py-6">No upcoming appointments</p>
+              )}
             </div>
           </CardContent>
         </Card>

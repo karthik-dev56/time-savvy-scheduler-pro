@@ -1,27 +1,30 @@
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState, useMemo } from 'react';
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight } from "lucide-react";
-import { format, addDays, startOfWeek, eachDayOfInterval } from 'date-fns';
+import { format, addDays, startOfWeek, eachDayOfInterval, parseISO, isSameDay } from 'date-fns';
+import { useAppointments } from '@/hooks/useAppointments';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useNavigate } from 'react-router-dom';
 
 const AppointmentCalendar = () => {
-  const [currentDate, setCurrentDate] = React.useState(new Date());
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-  const weekDays = eachDayOfInterval({
-    start: weekStart,
-    end: addDays(weekStart, 6)
-  });
-
-  // Mock appointment data
-  const appointments = [
-    { id: 1, title: "Team Meeting", start: "09:00", end: "10:00", priority: "high", day: 1 },
-    { id: 2, title: "Client Call", start: "11:00", end: "12:00", priority: "medium", day: 1 },
-    { id: 3, title: "Lunch Break", start: "12:30", end: "13:30", priority: "low", day: 1 },
-    { id: 4, title: "Project Review", start: "14:00", end: "15:00", priority: "medium", day: 2 },
-    { id: 5, title: "Strategy Session", start: "10:00", end: "11:30", priority: "high", day: 3 },
-    { id: 6, title: "Weekly Report", start: "16:00", end: "17:00", priority: "low", day: 4 },
-  ];
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const { appointments, loading } = useAppointments();
+  const navigate = useNavigate();
+  
+  const weekStart = useMemo(() => 
+    startOfWeek(currentDate, { weekStartsOn: 1 }), 
+    [currentDate]
+  );
+  
+  const weekDays = useMemo(() => 
+    eachDayOfInterval({
+      start: weekStart,
+      end: addDays(weekStart, 6)
+    }), 
+    [weekStart]
+  );
 
   // Time slots for the day
   const timeSlots = Array.from({ length: 12 }, (_, i) => i + 8); // 8AM to 7PM
@@ -34,11 +37,31 @@ const AppointmentCalendar = () => {
     setCurrentDate(addDays(currentDate, 7));
   };
 
-  const getAppointmentsForTimeAndDay = (time: number, day: number) => {
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const goToNewAppointment = () => {
+    navigate('/', { state: { activeTab: 'new' } });
+  };
+
+  const getAppointmentsForTimeAndDay = (time: number, day: Date) => {
+    if (loading) return [];
+    
     return appointments.filter(apt => {
-      const aptStart = parseInt(apt.start.split(':')[0]);
-      return aptStart === time && apt.day === day;
+      const aptDate = parseISO(apt.start_time);
+      const aptHour = aptDate.getHours();
+      return aptHour === time && isSameDay(aptDate, day);
     });
+  };
+
+  const getPriorityClass = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-100 text-red-800';
+      case 'urgent': return 'bg-red-200 text-red-900';
+      case 'low': return 'bg-blue-50 text-blue-800';
+      default: return 'bg-gray-50 text-gray-800';
+    }
   };
 
   return (
@@ -55,11 +78,11 @@ const AppointmentCalendar = () => {
           <Button variant="outline" size="sm" onClick={nextWeek}>
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={goToToday}>
             <CalendarIcon className="h-4 w-4 mr-2" />
             Today
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={goToNewAppointment}>
             <Plus className="h-4 w-4 mr-2" />
             New Appointment
           </Button>
@@ -92,22 +115,28 @@ const AppointmentCalendar = () => {
             </div>
 
             {/* Days columns */}
-            {Array.from({ length: 7 }, (_, dayIndex) => (
+            {weekDays.map((day, dayIndex) => (
               <div key={dayIndex} className="divide-y divide-border">
                 {timeSlots.map((time) => {
-                  const dayAppointments = getAppointmentsForTimeAndDay(time, dayIndex + 1);
+                  const dayAppointments = getAppointmentsForTimeAndDay(time, day);
                   return (
                     <div key={`${dayIndex}-${time}`} className="h-24 relative group">
-                      {dayAppointments.map((apt) => (
-                        <div 
-                          key={apt.id}
-                          className={`absolute top-0 left-0 right-0 mx-1 my-1 p-2 rounded-md cursor-pointer priority-${apt.priority} opacity-90 hover:opacity-100 transition-opacity`}
-                          style={{ height: 'calc(100% - 8px)' }}
-                        >
-                          <div className="text-xs font-medium truncate">{apt.title}</div>
-                          <div className="text-xs opacity-80">{apt.start} - {apt.end}</div>
-                        </div>
-                      ))}
+                      {loading ? (
+                        <Skeleton className="absolute top-1 left-1 right-1 h-[calc(100%-8px)]" />
+                      ) : (
+                        dayAppointments.map((apt) => (
+                          <div 
+                            key={apt.id}
+                            className={`absolute top-0 left-0 right-0 mx-1 my-1 p-2 rounded-md cursor-pointer ${getPriorityClass(apt.priority)} opacity-90 hover:opacity-100 transition-opacity`}
+                            style={{ height: 'calc(100% - 8px)' }}
+                          >
+                            <div className="text-xs font-medium truncate">{apt.title}</div>
+                            <div className="text-xs opacity-80">
+                              {format(parseISO(apt.start_time), 'h:mm a')} - {format(parseISO(apt.end_time), 'h:mm a')}
+                            </div>
+                          </div>
+                        ))
+                      )}
                       <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
                     </div>
                   );

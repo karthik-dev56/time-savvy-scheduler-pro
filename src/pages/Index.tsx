@@ -1,5 +1,6 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import Layout from '../components/Layout';
 import Dashboard from '../components/Dashboard';
 import NewAppointment from '../components/NewAppointment';
@@ -7,7 +8,15 @@ import AppointmentCalendar from '../components/AppointmentCalendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Index = () => {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("dashboard");
+
+  useEffect(() => {
+    // Check if location state contains an activeTab
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location]);
 
   return (
     <Layout>
