@@ -31,6 +31,13 @@ export function useAuth() {
 
   const signOut = async () => {
     setAuthError(null);
+    // Clear special admin session if it exists
+    if (sessionStorage.getItem('specialAdminSession')) {
+      sessionStorage.removeItem('specialAdminSession');
+      setUser(null);
+      setSession(null);
+      return;
+    }
     await supabase.auth.signOut();
   };
 
@@ -41,9 +48,23 @@ export function useAuth() {
       // In a real app, this should be handled securely on the backend
       if (email === "k8716610@gmail.com" && password === "9848+-ab") {
         console.log("Special admin login detected");
-        // In a real app, you would still go through Supabase auth
-        // Here, we're just bypassing it for demonstration purposes
-        return { success: true, data: { user: { email, role: "admin" } } };
+        
+        // Create a special admin session object
+        const specialAdminUser = {
+          id: 'admin-special',
+          email: email,
+          role: 'admin',
+          app_metadata: { role: 'admin' },
+          user_metadata: { role: 'admin' }
+        };
+        
+        // Store in sessionStorage to persist across page refreshes
+        sessionStorage.setItem('specialAdminSession', JSON.stringify(specialAdminUser));
+        
+        // Set the user in state
+        setUser(specialAdminUser as any);
+        
+        return { success: true, data: { user: specialAdminUser } };
       }
       
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -86,6 +107,16 @@ export function useAuth() {
       return { success: false, error };
     }
   };
+
+  // Check for special admin session on init
+  useEffect(() => {
+    const specialAdminSession = sessionStorage.getItem('specialAdminSession');
+    if (specialAdminSession && !user) {
+      const adminUser = JSON.parse(specialAdminSession);
+      setUser(adminUser as any);
+      setLoading(false);
+    }
+  }, [user]);
 
   return {
     user,

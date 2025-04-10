@@ -17,13 +17,21 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"signin" | "signup">("signin");
-  const { signIn, signUp, authError } = useAuth();
+  const { signIn, signUp, authError, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
   // Check if user is already logged in
   useEffect(() => {
     const checkUser = async () => {
+      // Check for special admin session first
+      const specialAdminSession = sessionStorage.getItem('specialAdminSession');
+      if (specialAdminSession) {
+        navigate("/admin");
+        return;
+      }
+      
+      // Then check for regular Supabase session
       const { data } = await supabase.auth.getSession();
       if (data.session) {
         navigate("/");
@@ -42,7 +50,7 @@ const Auth = () => {
     );
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, user]);
   
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,10 +85,13 @@ const Auth = () => {
     try {
       // Special admin access check
       if (email === "k8716610@gmail.com" && password === "9848+-ab") {
+        const result = await signIn(email, password);
+        
         toast({
           title: "Admin Access Granted",
           description: "Welcome to the admin panel!",
         });
+        
         // Navigate to admin page directly
         navigate("/admin");
         return;
