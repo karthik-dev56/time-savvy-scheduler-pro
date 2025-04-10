@@ -13,7 +13,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import type { Appointment } from '@/types/database.types';
 import { sendAppointmentNotification } from '@/utils/notificationUtils';
 
-const NewAppointment = () => {
+interface NewAppointmentProps {
+  onTitleChange?: (newTitle: string) => void;
+  onDescriptionChange?: (newDescription: string) => void;
+  onParticipantsChange?: (newParticipantIds: string[]) => void;
+  onTimeChange?: (startTime: string, endTime: string) => void;
+}
+
+const NewAppointment = ({
+  onTitleChange,
+  onDescriptionChange,
+  onParticipantsChange,
+  onTimeChange
+}: NewAppointmentProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -69,6 +81,22 @@ const NewAppointment = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (name === 'title' && onTitleChange) {
+      onTitleChange(value);
+    } else if (name === 'description' && onDescriptionChange) {
+      onDescriptionChange(value);
+    }
+
+    if ((name === 'startTime' || name === 'endTime') && onTimeChange && formData.date && formData.startTime && formData.endTime) {
+      const startTime = name === 'startTime' ? value : formData.startTime;
+      const endTime = name === 'endTime' ? value : formData.endTime;
+      if (startTime && endTime) {
+        const startDateTime = new Date(`${formData.date}T${startTime}`).toISOString();
+        const endDateTime = new Date(`${formData.date}T${endTime}`).toISOString();
+        onTimeChange(startDateTime, endDateTime);
+      }
+    }
   };
 
   const handleSelectChange = (value: string) => {
@@ -102,6 +130,14 @@ const NewAppointment = () => {
 
   const removeParticipant = (index: number) => {
     setParticipants(participants.filter((_, i) => i !== index));
+
+    if (onParticipantsChange) {
+      const participantIds = participants
+        .filter((_, i) => i !== index)
+        .filter(p => p.id)
+        .map(p => p.id as string);
+      onParticipantsChange(participantIds);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

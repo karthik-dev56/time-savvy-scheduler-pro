@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
@@ -78,7 +77,7 @@ const AdminPage = () => {
       // Get all user roles
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id, role');
+        .select('user_id, role') as { data: { user_id: string, role: UserRole }[], error: any };
         
       if (rolesError) {
         console.error('Error fetching user roles:', rolesError);
@@ -114,7 +113,7 @@ const AdminPage = () => {
         .from('audit_logs')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(50) as { data: any[], error: any };
         
       if (error) {
         console.error('Error fetching audit logs:', error);

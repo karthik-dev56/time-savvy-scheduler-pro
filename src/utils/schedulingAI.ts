@@ -38,7 +38,7 @@ export const predictNoShow = async (userId: string): Promise<number> => {
         table_name: 'appointments',
         user_id: userId,
         details: { prediction: randomFactor }
-      });
+      } as any);
       
     return randomFactor;
   } catch (error) {
@@ -110,7 +110,7 @@ export const findAlternativeSlots = async (
   try {
     const startDate = new Date(appointment.start_time);
     const endDate = new Date(appointment.end_time);
-    const duration = (endDate.getTime() - startDate.getTime()) / (1000 * 60); // in minutes
+    const durationMinutes = (endDate.getTime() - startDate.getTime()) / (1000 * 60); // in minutes
     
     // Get existing appointments for the user
     const { data: existingAppointments, error } = await supabase
@@ -122,7 +122,7 @@ export const findAlternativeSlots = async (
       
     if (error) {
       console.error("Error fetching existing appointments:", error);
-      return generateDefaultSlots(duration, numberOfSlots);
+      return generateDefaultSlots(durationMinutes, numberOfSlots);
     }
     
     // Find free slots in the next 7 days
@@ -152,7 +152,7 @@ export const findAlternativeSlots = async (
         if (slots.length >= numberOfSlots) break;
         
         const potentialStart = new Date(currentDate.setHours(hour, 0, 0, 0));
-        const potentialEnd = new Date(potentialStart.getTime() + duration * 60 * 1000);
+        const potentialEnd = new Date(potentialStart.getTime() + durationMinutes * 60 * 1000);
         
         // Skip if in the past
         if (potentialStart <= now) continue;
@@ -173,10 +173,10 @@ export const findAlternativeSlots = async (
       }
     }
     
-    return slots.length > 0 ? slots : generateDefaultSlots(duration, numberOfSlots);
+    return slots.length > 0 ? slots : generateDefaultSlots(durationMinutes, numberOfSlots);
   } catch (error) {
     console.error("Error finding alternative slots:", error);
-    return generateDefaultSlots(duration, numberOfSlots);
+    return generateDefaultSlots(durationMinutes, numberOfSlots);
   }
 };
 

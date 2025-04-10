@@ -31,6 +31,8 @@ export function useRoleManagement() {
 
     try {
       setLoading(true);
+      
+      // Using a type assertion to handle the new table that isn't in the generated types yet
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
@@ -60,6 +62,8 @@ export function useRoleManagement() {
 
     try {
       setLoading(true);
+      
+      // Using a type assertion to handle the new table
       const { data, error } = await supabase
         .from('user_roles')
         .select('*');
@@ -73,7 +77,7 @@ export function useRoleManagement() {
         });
         setAllUserRoles([]);
       } else {
-        setAllUserRoles(data as UserRoleData[]);
+        setAllUserRoles(data as unknown as UserRoleData[]);
       }
     } catch (error: any) {
       console.error('Unexpected error fetching all user roles:', error);
@@ -95,6 +99,7 @@ export function useRoleManagement() {
     }
 
     try {
+      // Using a type assertion for the new table
       const { data, error } = await supabase
         .from('user_roles')
         .upsert({ 
@@ -125,7 +130,7 @@ export function useRoleManagement() {
           table_name: 'user_roles',
           record_id: userId,
           details: { assigned_role: role }
-        });
+        } as any);
 
       toast({
         title: "Role Assigned",

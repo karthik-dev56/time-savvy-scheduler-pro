@@ -12,6 +12,14 @@ import { Lightbulb, Users, AlertTriangle, Clock, ArrowRight } from 'lucide-react
 import { estimateMeetingDuration, predictNoShow, findAlternativeSlots } from '@/utils/schedulingAI';
 import { useToast } from '@/hooks/use-toast';
 
+// Define props for the NewAppointment component
+interface NewAppointmentProps {
+  onTitleChange?: (newTitle: string) => void;
+  onDescriptionChange?: (newDescription: string) => void;
+  onParticipantsChange?: (newParticipantIds: string[]) => void;
+  onTimeChange?: (startTime: string, endTime: string) => void;
+}
+
 const SmartNewAppointment = () => {
   const { user } = useAuth();
   const { appointments } = useAppointments();
