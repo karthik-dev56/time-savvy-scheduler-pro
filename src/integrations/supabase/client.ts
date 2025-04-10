@@ -39,3 +39,34 @@ export interface AIPrediction {
   created_at: string | null;
   updated_at: string | null;
 }
+
+// Helper function for AI prediction metrics table
+export const getAIPredictionMetrics = async (): Promise<AIPredictionMetrics | null> => {
+  const { data, error } = await supabase
+    .from('ai_prediction_metrics')
+    .select('*')
+    .single();
+  
+  if (error) {
+    console.error('Error fetching AI metrics:', error);
+    return null;
+  }
+  
+  return data as unknown as AIPredictionMetrics;
+};
+
+// Helper function for AI predictions table
+export const getAIPredictions = async (limit = 10): Promise<AIPrediction[]> => {
+  const { data, error } = await supabase
+    .from('ai_predictions')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  
+  if (error) {
+    console.error('Error fetching AI predictions:', error);
+    return [];
+  }
+  
+  return data as unknown as AIPrediction[];
+};

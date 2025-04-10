@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/hooks/useAuth';
 import { useRoleManagement, UserRole, UserRoleData } from '@/hooks/useRoleManagement';
-import { supabase, AIPrediction, AIPredictionMetrics } from '@/integrations/supabase/client';
+import { supabase, AIPrediction, AIPredictionMetrics, getAIPredictionMetrics, getAIPredictions } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Tabs,
@@ -169,38 +168,31 @@ const AdminPage = () => {
     try {
       setLoading(true);
       
-      // Fetch AI prediction metrics from Supabase
-      const { data: metricsData, error: metricsError } = await supabase
-        .from('ai_prediction_metrics')
-        .select('*')
-        .single() as { data: AIPredictionMetrics | null, error: any };
+      // Use our helper function to fetch metrics
+      const metricsData = await getAIPredictionMetrics();
       
-      if (metricsError) {
-        console.error('Error fetching AI metrics:', metricsError);
+      if (metricsData) {
+        setPredictionMetrics({
+          noShowAccuracy: metricsData.no_show_accuracy || 87,
+          durationAccuracy: metricsData.duration_accuracy || 92,
+          rescheduleAcceptance: metricsData.reschedule_acceptance || 79
+        });
+      } else {
         // Fallback to demo data if table doesn't exist
         setPredictionMetrics({
           noShowAccuracy: 87,
           durationAccuracy: 92,
           rescheduleAcceptance: 79
         });
-      } else if (metricsData) {
-        setPredictionMetrics({
-          noShowAccuracy: metricsData.no_show_accuracy || 87,
-          durationAccuracy: metricsData.duration_accuracy || 92,
-          rescheduleAcceptance: metricsData.reschedule_acceptance || 79
-        });
       }
       
-      // Fetch recent AI predictions
-      const { data: recentData, error: recentError } = await supabase
-        .from('ai_predictions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10) as { data: AIPrediction[] | null, error: any };
+      // Use our helper function to fetch predictions
+      const predictionsData = await getAIPredictions(10);
       
-      if (recentError) {
-        console.error('Error fetching AI predictions:', recentError);
-        // Use demo data if table doesn't exist
+      if (predictionsData && predictionsData.length > 0) {
+        setPredictions(predictionsData);
+      } else {
+        // Use demo data if no predictions are found
         setPredictions([
           { 
             id: '1', 
@@ -230,8 +222,6 @@ const AdminPage = () => {
             updated_at: new Date().toISOString()
           }
         ]);
-      } else {
-        setPredictions(recentData || []);
       }
     } catch (error) {
       console.error('Error in fetchAIPredictions:', error);
