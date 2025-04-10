@@ -9,6 +9,63 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      ai_prediction_metrics: {
+        Row: {
+          created_at: string | null
+          duration_accuracy: number
+          id: string
+          no_show_accuracy: number
+          reschedule_acceptance: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration_accuracy?: number
+          id?: string
+          no_show_accuracy?: number
+          reschedule_acceptance?: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          duration_accuracy?: number
+          id?: string
+          no_show_accuracy?: number
+          reschedule_acceptance?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ai_predictions: {
+        Row: {
+          accuracy: number
+          created_at: string | null
+          id: string
+          prediction: string
+          timestamp: string | null
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          accuracy: number
+          created_at?: string | null
+          id?: string
+          prediction: string
+          timestamp?: string | null
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          accuracy?: number
+          created_at?: string | null
+          id?: string
+          prediction?: string
+          timestamp?: string | null
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       appointments: {
         Row: {
           created_at: string | null

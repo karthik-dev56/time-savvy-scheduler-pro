@@ -19,3 +19,23 @@ export const supabase = createClient<Database>(
     }
   }
 );
+
+// Types for our AI prediction related tables
+export interface AIPredictionMetrics {
+  id: string;
+  no_show_accuracy: number;
+  duration_accuracy: number;
+  reschedule_acceptance: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface AIPrediction {
+  id: string;
+  type: string;
+  prediction: string;
+  accuracy: number;
+  timestamp: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}

@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/hooks/useAuth';
 import { useRoleManagement, UserRole, UserRoleData } from '@/hooks/useRoleManagement';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, AIPrediction, AIPredictionMetrics } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Tabs,
@@ -31,14 +31,6 @@ interface UserWithRole {
   id: string;
   email: string;
   role: UserRole | null;
-}
-
-interface AIPrediction {
-  id: string;
-  type: string;
-  prediction: string;
-  accuracy: number;
-  timestamp: string;
 }
 
 const AdminPage = () => {
@@ -181,7 +173,7 @@ const AdminPage = () => {
       const { data: metricsData, error: metricsError } = await supabase
         .from('ai_prediction_metrics')
         .select('*')
-        .single();
+        .single() as { data: AIPredictionMetrics | null, error: any };
       
       if (metricsError) {
         console.error('Error fetching AI metrics:', metricsError);
@@ -204,7 +196,7 @@ const AdminPage = () => {
         .from('ai_predictions')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(10) as { data: AIPrediction[] | null, error: any };
       
       if (recentError) {
         console.error('Error fetching AI predictions:', recentError);
@@ -215,21 +207,27 @@ const AdminPage = () => {
             type: 'No-Show', 
             prediction: 'Low Risk (15%)', 
             accuracy: 100, 
-            timestamp: new Date().toISOString() 
+            timestamp: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           },
           { 
             id: '2', 
             type: 'Duration', 
             prediction: '45 minutes', 
             accuracy: 78, 
-            timestamp: new Date().toISOString() 
+            timestamp: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           },
           { 
             id: '3', 
             type: 'Reschedule', 
             prediction: 'Suggested 3 slots', 
             accuracy: 90, 
-            timestamp: new Date().toISOString() 
+            timestamp: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           }
         ]);
       } else {
@@ -555,7 +553,7 @@ const AdminPage = () => {
                         ) : (
                           predictions.map((entry) => (
                             <TableRow key={entry.id}>
-                              <TableCell>{new Date(entry.timestamp).toLocaleString()}</TableCell>
+                              <TableCell>{entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'Unknown'}</TableCell>
                               <TableCell>{entry.type}</TableCell>
                               <TableCell>{entry.prediction}</TableCell>
                               <TableCell>{formatAccuracy(entry)}</TableCell>
