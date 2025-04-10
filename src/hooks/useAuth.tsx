@@ -37,6 +37,15 @@ export function useAuth() {
   const signIn = async (email: string, password: string) => {
     setAuthError(null);
     try {
+      // Check for special admin user (this is a client-side check only for demonstration)
+      // In a real app, this should be handled securely on the backend
+      if (email === "k8716610@gmail.com" && password === "9848+-ab") {
+        console.log("Special admin login detected");
+        // In a real app, you would still go through Supabase auth
+        // Here, we're just bypassing it for demonstration purposes
+        return { success: true, data: { user: { email, role: "admin" } } };
+      }
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,

