@@ -104,45 +104,6 @@ const NewAppointment = () => {
     setParticipants(participants.filter((_, i) => i !== index));
   };
 
-  const sendToWebhook = async (appointmentData: any) => {
-    try {
-      const webhookUrl = 'https://kumar688.app.n8n.cloud/webhook-test/karthik';
-      
-      const structuredData = {
-        title: appointmentData.title,
-        description: appointmentData.description || "",
-        date: appointmentData.date,
-        startTime: appointmentData.startTime,
-        endTime: appointmentData.endTime,
-        formattedStartTime: appointmentData.formattedStartTime,
-        formattedEndTime: appointmentData.formattedEndTime,
-        priority: appointmentData.priority,
-        isMultiPerson: appointmentData.isMultiPerson,
-        appointmentId: appointmentData.id,
-        userId: appointmentData.userId,
-        participants: appointmentData.participants.map((p: any) => ({
-          email: p.email,
-          id: p.id || null
-        }))
-      };
-      
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        mode: 'no-cors', // This helps with CORS issues
-        body: JSON.stringify(structuredData),
-      });
-      
-      console.log('Structured appointment data sent to webhook:', structuredData);
-      return true;
-    } catch (error: any) {
-      console.error('Error sending to webhook:', error);
-      return false;
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -207,23 +168,6 @@ const NewAppointment = () => {
         }
       }
 
-      const webhookData = {
-        id: appointmentData?.id,
-        title: formData.title,
-        description: formData.description,
-        date: formData.date,
-        startTime: formData.startTime,
-        endTime: formData.endTime,
-        formattedStartTime: new Date(startDateTime).toLocaleString(),
-        formattedEndTime: new Date(endDateTime).toLocaleString(),
-        priority: formData.priority,
-        isMultiPerson: formData.isMultiPerson,
-        userId: user.id,
-        participants: participants
-      };
-
-      const webhookSent = await sendToWebhook(webhookData);
-
       if (appointmentData) {
         const formattedDateTime = new Date(startDateTime).toLocaleString();
         await sendAppointmentNotification(user.id, formData.title, formattedDateTime);
@@ -231,7 +175,7 @@ const NewAppointment = () => {
 
       toast({
         title: "Success",
-        description: `Appointment created successfully${webhookSent ? ' and notification sent' : ''}`,
+        description: "Appointment created successfully and email notification sent",
       });
 
       setFormData({

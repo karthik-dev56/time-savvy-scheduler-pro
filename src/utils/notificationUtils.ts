@@ -1,6 +1,11 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { EmailNotificationSetting } from '@/types/database.types';
+import emailjs from 'emailjs-com';
+
+// Initialize EmailJS with your User ID
+// You would normally set this in your app initialization
+// emailjs.init("YOUR_USER_ID");
 
 export const sendAppointmentNotification = async (userId: string, appointmentTitle: string, appointmentDateTime: string) => {
   try {
@@ -20,23 +25,32 @@ export const sendAppointmentNotification = async (userId: string, appointmentTit
     // Type assertion to ensure TypeScript recognizes the shape
     const typedEmailSettings = emailSettings as unknown as EmailNotificationSetting;
     
-    // Use the default email if specified, otherwise use the user's email setting
-    const emailToUse = 'drete604@gmail.com';
+    // Get user's email
+    const { data: userProfile, error: userError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', userId)
+      .single();
     
-    console.log(`✉️ Email notification would be sent to ${emailToUse}`);
-    console.log(`Subject: New Appointment Created`);
-    console.log(`Body: Your appointment "${appointmentTitle}" has been scheduled for ${appointmentDateTime}`);
+    // Use the user's email or default
+    const emailToUse = userProfile?.email || 'drete604@gmail.com';
     
-    // In a full implementation, you would call an edge function to send the email
-    // For example:
-    // await supabase.functions.invoke('send-email', {
-    //   body: {
-    //     recipient: emailToUse,
-    //     subject: 'New Appointment Created',
-    //     message: `Your appointment "${appointmentTitle}" has been scheduled for ${appointmentDateTime}`
-    //   }
-    // });
+    // Send email using EmailJS
+    const templateParams = {
+      to_email: emailToUse,
+      appointment_title: appointmentTitle,
+      appointment_time: appointmentDateTime,
+      subject: "New Appointment Created"
+    };
     
+    await emailjs.send(
+      process.env.REACT_APP_EMAILJS_SERVICE_ID || 'default_service',
+      process.env.REACT_APP_EMAILJS_TEMPLATE_ID || 'default_template',
+      templateParams,
+      process.env.REACT_APP_EMAILJS_USER_ID || 'default_user'
+    );
+    
+    console.log(`✉️ Email notification sent to ${emailToUse}`);
     return true;
   } catch (error) {
     console.error("Failed to send appointment notification:", error);
@@ -62,15 +76,31 @@ export const sendSettingsChangeNotification = async (userId: string) => {
     // Type assertion to ensure TypeScript recognizes the shape
     const typedEmailSettings = emailSettings as unknown as EmailNotificationSetting;
     
-    // Use the default email
-    const emailToUse = 'drete604@gmail.com';
+    // Get user's email
+    const { data: userProfile, error: userError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', userId)
+      .single();
     
-    console.log(`✉️ Email notification would be sent to ${emailToUse}`);
-    console.log(`Subject: Notification Settings Updated`);
-    console.log(`Body: Your notification settings have been updated. If you did not make this change, please contact support.`);
+    // Use the user's email or default
+    const emailToUse = userProfile?.email || 'drete604@gmail.com';
     
-    // In a full implementation, you would call an edge function to send the email
+    // Send email using EmailJS
+    const templateParams = {
+      to_email: emailToUse,
+      subject: "Notification Settings Updated",
+      message: "Your notification settings have been updated. If you did not make this change, please contact support."
+    };
     
+    await emailjs.send(
+      process.env.REACT_APP_EMAILJS_SERVICE_ID || 'default_service',
+      process.env.REACT_APP_EMAILJS_TEMPLATE_ID || 'default_template',
+      templateParams,
+      process.env.REACT_APP_EMAILJS_USER_ID || 'default_user'
+    );
+    
+    console.log(`✉️ Email notification sent to ${emailToUse}`);
     return true;
   } catch (error) {
     console.error("Failed to send settings change notification:", error);
@@ -81,17 +111,17 @@ export const sendSettingsChangeNotification = async (userId: string) => {
 // Send appointment reminders based on reminder time
 export const sendAppointmentReminder = async (appointmentId: string) => {
   try {
-    // Call our new webhook edge function to send the reminder email
+    // Call the edge function to send reminder email
     const { data, error } = await supabase.functions.invoke('send-reminder-email', {
-      body: { appointmentId, recipientEmail: 'drete604@gmail.com' }
+      body: { appointmentId }
     });
     
     if (error) {
-      console.error("Failed to send appointment reminder via webhook:", error);
+      console.error("Failed to send appointment reminder via edge function:", error);
       return false;
     }
     
-    console.log("Appointment reminder sent successfully via webhook:", data);
+    console.log("Appointment reminder sent successfully via edge function:", data);
     return true;
   } catch (error) {
     console.error("Error in sendAppointmentReminder:", error);
