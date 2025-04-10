@@ -45,16 +45,16 @@ serve(async (req) => {
       throw new Error(`Appointment not found: ${appointmentError?.message || 'Unknown error'}`);
     }
 
-    // Get the user's email if not provided
+    // Get the user's email from email_notifications table instead of profiles
     if (!recipientEmail || recipientEmail === "drete604@gmail.com") {
-      const { data: userProfile, error: userError } = await supabase
-        .from('profiles')
+      const { data: emailSettings, error: emailError } = await supabase
+        .from('email_notifications')
         .select('email')
-        .eq('id', appointment.user_id)
+        .eq('user_id', appointment.user_id)
         .single();
       
-      if (!userError && userProfile && userProfile.email) {
-        recipientEmail = userProfile.email;
+      if (!emailError && emailSettings && emailSettings.email) {
+        recipientEmail = emailSettings.email;
       }
     }
 

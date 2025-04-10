@@ -25,15 +25,8 @@ export const sendAppointmentNotification = async (userId: string, appointmentTit
     // Type assertion to ensure TypeScript recognizes the shape
     const typedEmailSettings = emailSettings as unknown as EmailNotificationSetting;
     
-    // Get user's email
-    const { data: userProfile, error: userError } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('id', userId)
-      .single();
-    
-    // Use the user's email or default
-    const emailToUse = userProfile?.email || 'drete604@gmail.com';
+    // Get user's email from email_notifications table instead of profiles
+    const emailToUse = typedEmailSettings.email || 'drete604@gmail.com';
     
     // Send email using EmailJS
     const templateParams = {
@@ -76,15 +69,8 @@ export const sendSettingsChangeNotification = async (userId: string) => {
     // Type assertion to ensure TypeScript recognizes the shape
     const typedEmailSettings = emailSettings as unknown as EmailNotificationSetting;
     
-    // Get user's email
-    const { data: userProfile, error: userError } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('id', userId)
-      .single();
-    
-    // Use the user's email or default
-    const emailToUse = userProfile?.email || 'drete604@gmail.com';
+    // Get user's email from email_notifications table instead of profiles
+    const emailToUse = typedEmailSettings.email || 'drete604@gmail.com';
     
     // Send email using EmailJS
     const templateParams = {
