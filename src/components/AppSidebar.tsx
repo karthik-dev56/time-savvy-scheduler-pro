@@ -13,12 +13,15 @@ import {
   SidebarHeader,
   SidebarFooter
 } from "@/components/ui/sidebar";
-import { Calendar, Clock, Users, Settings, Home, PieChart, Bell, User } from "lucide-react";
+import { Calendar, Clock, Users, Settings, Home, PieChart, Bell, User, ShieldCheck } from "lucide-react";
 import { useAuth } from '@/hooks/useAuth';
+import { useRoleManagement } from '@/hooks/useRoleManagement';
+import { Badge } from '@/components/ui/badge';
 
 const AppSidebar = () => {
   const location = useLocation();
   const { user } = useAuth();
+  const { userRole, isAdminOrManager } = useRoleManagement();
   
   const menuItems = [
     { title: "Dashboard", icon: Home, url: "/" },
@@ -78,6 +81,25 @@ const AppSidebar = () => {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                
+                {isAdminOrManager() && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      asChild 
+                      isActive={location.pathname === "/admin"}
+                    >
+                      <Link to="/admin" className="flex items-center gap-3">
+                        <ShieldCheck size={18} />
+                        <span>Admin Panel</span>
+                        {userRole === 'admin' && (
+                          <Badge variant="outline" className="ml-auto text-xs bg-red-50 text-red-700 border-red-200">
+                            Admin
+                          </Badge>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -93,7 +115,7 @@ const AppSidebar = () => {
               {user ? (user.email?.split('@')[0] || 'User') : 'Guest'}
             </p>
             <p className="text-xs text-sidebar-foreground/70">
-              {user ? user.email : 'Not signed in'}
+              {userRole ? `${userRole} account` : (user ? user.email : 'Not signed in')}
             </p>
           </div>
         </div>
