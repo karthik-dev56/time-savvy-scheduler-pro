@@ -32,7 +32,7 @@ export const predictNoShow = async (userId: string): Promise<number> => {
     
     // Store this prediction in audit logs for future model training
     await supabase
-      .from('audit_logs')
+      .from('audit_logs' as any)
       .insert({
         action: 'no_show_prediction',
         table_name: 'appointments',
@@ -110,7 +110,8 @@ export const findAlternativeSlots = async (
   try {
     const startDate = new Date(appointment.start_time);
     const endDate = new Date(appointment.end_time);
-    const durationMinutes = (endDate.getTime() - startDate.getTime()) / (1000 * 60); // in minutes
+    const durationMs = endDate.getTime() - startDate.getTime(); // duration in milliseconds
+    const durationMinutes = durationMs / (1000 * 60); // convert to minutes
     
     // Get existing appointments for the user
     const { data: existingAppointments, error } = await supabase
@@ -176,7 +177,7 @@ export const findAlternativeSlots = async (
     return slots.length > 0 ? slots : generateDefaultSlots(durationMinutes, numberOfSlots);
   } catch (error) {
     console.error("Error finding alternative slots:", error);
-    return generateDefaultSlots(durationMinutes, numberOfSlots);
+    return generateDefaultSlots(30, numberOfSlots); // Default to 30 minutes if there's an error
   }
 };
 
