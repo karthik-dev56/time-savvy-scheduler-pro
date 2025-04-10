@@ -23,6 +23,8 @@ const AppSidebar = () => {
   const { user } = useAuth();
   const { userRole, isAdminOrManager } = useRoleManagement();
   
+  const isSpecialAdmin = user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin');
+  
   const menuItems = [
     { title: "Dashboard", icon: Home, url: "/" },
     { title: "Calendar", icon: Calendar, url: "/calendar" },
@@ -82,7 +84,7 @@ const AppSidebar = () => {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 
-                {isAdminOrManager() && (
+                {isAdminOrManager() || isSpecialAdmin ? (
                   <SidebarMenuItem>
                     <SidebarMenuButton 
                       asChild 
@@ -91,7 +93,7 @@ const AppSidebar = () => {
                       <Link to="/admin" className="flex items-center gap-3">
                         <ShieldCheck size={18} />
                         <span>Admin Panel</span>
-                        {userRole === 'admin' && (
+                        {(isSpecialAdmin || userRole === 'admin') && (
                           <Badge variant="outline" className="ml-auto text-xs bg-red-50 text-red-700 border-red-200">
                             Admin
                           </Badge>
@@ -99,7 +101,7 @@ const AppSidebar = () => {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                )}
+                ) : null}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -115,7 +117,7 @@ const AppSidebar = () => {
               {user ? (user.email?.split('@')[0] || 'User') : 'Guest'}
             </p>
             <p className="text-xs text-sidebar-foreground/70">
-              {userRole ? `${userRole} account` : (user ? user.email : 'Not signed in')}
+              {isSpecialAdmin ? 'admin account' : (userRole ? `${userRole} account` : (user ? user.email : 'Not signed in'))}
             </p>
           </div>
         </div>

@@ -29,6 +29,13 @@ export function useRoleManagement() {
       return;
     }
 
+    // Check for special admin user first
+    if (user.id === 'admin-special' || (user.app_metadata && user.app_metadata.role === 'admin')) {
+      setUserRole('admin');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       
@@ -40,14 +47,15 @@ export function useRoleManagement() {
         .single();
 
       if (error) {
-        console.error('Error fetching user role:', error);
-        setUserRole(null);
+        console.log('Error fetching user role:', error);
+        // If there's an error, set a default role of 'user'
+        setUserRole('user');
       } else {
         setUserRole(data.role as UserRole);
       }
     } catch (error: any) {
       console.error('Unexpected error fetching user role:', error);
-      setUserRole(null);
+      setUserRole('user'); // Fallback to user role
     } finally {
       setLoading(false);
     }
@@ -55,7 +63,11 @@ export function useRoleManagement() {
 
   // Fetch all users with their roles (for admin panel)
   const fetchAllUserRoles = async () => {
-    if (!user || userRole !== 'admin') {
+    // Check if the special admin user
+    if (user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin')) {
+      // For the special admin user, we don't need to check the database role
+      // Just continue with the function
+    } else if (!user || userRole !== 'admin') {
       setAllUserRoles([]);
       return;
     }
@@ -89,7 +101,10 @@ export function useRoleManagement() {
 
   // Assign a role to a user (admin only)
   const assignRole = async (userId: string, role: UserRole) => {
-    if (!user || userRole !== 'admin') {
+    // Check if the special admin user
+    if (user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin')) {
+      // Special admin is always allowed to assign roles
+    } else if (!user || userRole !== 'admin') {
       toast({
         title: "Permission Denied",
         description: "You don't have permission to assign roles",
@@ -153,11 +168,17 @@ export function useRoleManagement() {
 
   // Check if the current user has a specific role
   const hasRole = (role: UserRole): boolean => {
+    if (user?.id === 'admin-special' && role === 'admin') {
+      return true;
+    }
     return userRole === role;
   };
 
   // Check if the current user is an admin or manager
   const isAdminOrManager = (): boolean => {
+    if (user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin')) {
+      return true;
+    }
     return userRole === 'admin' || userRole === 'manager';
   };
 
@@ -166,13 +187,13 @@ export function useRoleManagement() {
   }, [user]);
 
   useEffect(() => {
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || user?.id === 'admin-special') {
       fetchAllUserRoles();
     }
-  }, [userRole]);
+  }, [userRole, user]);
 
   return {
-    userRole,
+    userRole: user?.id === 'admin-special' ? 'admin' : userRole,
     loading,
     allUserRoles,
     hasRole,

@@ -20,6 +20,8 @@ const UserMenu = () => {
   const { user, signOut } = useAuth();
   const { userRole, loading: roleLoading } = useRoleManagement();
   const navigate = useNavigate();
+  
+  const isSpecialAdmin = user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin');
 
   const handleSignOut = async () => {
     await signOut();
@@ -39,6 +41,8 @@ const UserMenu = () => {
     : 'U';
 
   const getRoleBadgeColor = () => {
+    if (isSpecialAdmin) return 'bg-red-100 text-red-800 border-red-200';
+    
     switch (userRole) {
       case 'admin': return 'bg-red-100 text-red-800 border-red-200';
       case 'manager': return 'bg-blue-100 text-blue-800 border-blue-200';
@@ -63,10 +67,10 @@ const UserMenu = () => {
             <p className="text-xs leading-none text-muted-foreground">
               {user.email}
             </p>
-            {userRole && !roleLoading && (
+            {(isSpecialAdmin || (userRole && !roleLoading)) && (
               <div className="mt-2">
                 <Badge variant="outline" className={`${getRoleBadgeColor()} flex items-center gap-1`}>
-                  <ShieldCheck className="h-3 w-3" /> {userRole}
+                  <ShieldCheck className="h-3 w-3" /> {isSpecialAdmin ? 'admin' : userRole}
                 </Badge>
               </div>
             )}
@@ -77,7 +81,7 @@ const UserMenu = () => {
           <User className="mr-2 h-4 w-4" />
           <span>Profile</span>
         </DropdownMenuItem>
-        {(userRole === 'admin' || userRole === 'manager') && (
+        {(isSpecialAdmin || userRole === 'admin' || userRole === 'manager') && (
           <DropdownMenuItem onClick={() => navigate('/admin')}>
             <ShieldCheck className="mr-2 h-4 w-4" />
             <span>Admin Panel</span>

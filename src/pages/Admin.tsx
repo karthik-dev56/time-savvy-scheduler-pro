@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
@@ -43,10 +44,12 @@ const AdminPage = () => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('users');
 
+  const isSpecialAdmin = user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin');
+
   // Redirect if not admin or manager
   useEffect(() => {
     if (!authLoading && !roleLoading && user) {
-      if (userRole !== 'admin' && userRole !== 'manager') {
+      if (!isSpecialAdmin && userRole !== 'admin' && userRole !== 'manager') {
         toast({
           title: "Access Denied",
           description: "You don't have permission to view this page",
@@ -57,11 +60,11 @@ const AdminPage = () => {
     } else if (!authLoading && !user) {
       navigate('/auth');
     }
-  }, [user, userRole, authLoading, roleLoading]);
+  }, [user, userRole, authLoading, roleLoading, isSpecialAdmin]);
 
   // Fetch users and their roles
   const fetchUsers = async () => {
-    if (userRole !== 'admin' && userRole !== 'manager') return;
+    if (!isSpecialAdmin && userRole !== 'admin' && userRole !== 'manager') return;
 
     try {
       setLoading(true);
@@ -104,7 +107,7 @@ const AdminPage = () => {
 
   // Fetch audit logs
   const fetchAuditLogs = async () => {
-    if (userRole !== 'admin') return;
+    if (!isSpecialAdmin && userRole !== 'admin') return;
 
     try {
       setLoading(true);
@@ -130,18 +133,18 @@ const AdminPage = () => {
 
   // Load data based on active tab
   useEffect(() => {
-    if (userRole === 'admin' || userRole === 'manager') {
+    if (isSpecialAdmin || userRole === 'admin' || userRole === 'manager') {
       if (activeTab === 'users') {
         fetchUsers();
-      } else if (activeTab === 'audit' && userRole === 'admin') {
+      } else if (activeTab === 'audit' && (isSpecialAdmin || userRole === 'admin')) {
         fetchAuditLogs();
       }
     }
-  }, [userRole, activeTab]);
+  }, [userRole, activeTab, isSpecialAdmin]);
 
   // Handle role change
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
-    if (userRole !== 'admin') {
+    if (!isSpecialAdmin && userRole !== 'admin') {
       toast({
         title: "Permission Denied",
         description: "Only admins can change user roles",
@@ -176,6 +179,9 @@ const AdminPage = () => {
     );
   }
 
+  // Determine what tabs to show based on role
+  const isAdmin = isSpecialAdmin || userRole === 'admin';
+
   return (
     <Layout>
       <div className="container max-w-7xl py-10">
@@ -187,7 +193,7 @@ const AdminPage = () => {
               <User className="mr-2 h-4 w-4" />
               Users & Roles
             </TabsTrigger>
-            {userRole === 'admin' && (
+            {isAdmin && (
               <TabsTrigger value="audit">
                 <History className="mr-2 h-4 w-4" />
                 Audit Logs
@@ -204,7 +210,7 @@ const AdminPage = () => {
               <CardHeader>
                 <CardTitle>User Management</CardTitle>
                 <CardDescription>
-                  {userRole === 'admin' 
+                  {isAdmin 
                     ? 'Manage users and their permission levels' 
                     : 'View users and their permission levels'}
                 </CardDescription>
@@ -223,7 +229,7 @@ const AdminPage = () => {
                     <TableRow>
                       <TableHead>Email</TableHead>
                       <TableHead>Current Role</TableHead>
-                      {userRole === 'admin' && <TableHead>Actions</TableHead>}
+                      {isAdmin && <TableHead>Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -251,7 +257,7 @@ const AdminPage = () => {
                               {user.role || 'No Role'}
                             </Badge>
                           </TableCell>
-                          {userRole === 'admin' && (
+                          {isAdmin && (
                             <TableCell>
                               <Select
                                 value={user.role || ''}
@@ -278,7 +284,7 @@ const AdminPage = () => {
             </Card>
           </TabsContent>
           
-          {userRole === 'admin' && (
+          {isAdmin && (
             <TabsContent value="audit">
               <Card>
                 <CardHeader>
