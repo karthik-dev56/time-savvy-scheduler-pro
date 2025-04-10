@@ -10,9 +10,24 @@ export function useAuth() {
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check for special admin session first to avoid unnecessary Supabase calls
+    const specialAdminSession = sessionStorage.getItem('specialAdminSession');
+    if (specialAdminSession) {
+      try {
+        const adminUser = JSON.parse(specialAdminSession);
+        setUser(adminUser as any);
+        setLoading(false);
+        return; // Exit early if special admin session exists
+      } catch (error) {
+        console.error("Invalid admin session data:", error);
+        // Continue with normal auth flow if parsing fails
+      }
+    }
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log("Auth state changed:", event);
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -107,16 +122,6 @@ export function useAuth() {
       return { success: false, error };
     }
   };
-
-  // Check for special admin session on init
-  useEffect(() => {
-    const specialAdminSession = sessionStorage.getItem('specialAdminSession');
-    if (specialAdminSession && !user) {
-      const adminUser = JSON.parse(specialAdminSession);
-      setUser(adminUser as any);
-      setLoading(false);
-    }
-  }, [user]);
 
   return {
     user,

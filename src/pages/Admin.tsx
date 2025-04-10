@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/hooks/useAuth';
 import { useRoleManagement, UserRole, UserRoleData } from '@/hooks/useRoleManagement';
@@ -48,19 +48,16 @@ const AdminPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('users');
-  const location = useLocation();
 
   const isSpecialAdmin = user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin');
 
-  // Redirect if not authenticated
+  // Redirect if not authenticated - optimized to prevent unnecessary redirects
   useEffect(() => {
     if (!authLoading && !user) {
-      // Redirect to auth page with return path
       navigate('/auth', { state: { returnPath: '/admin' } });
       return;
     }
     
-    // Redirect if authenticated but not admin or manager
     if (!authLoading && !roleLoading && user) {
       if (!isSpecialAdmin && userRole !== 'admin' && userRole !== 'manager') {
         toast({
@@ -71,63 +68,33 @@ const AdminPage = () => {
         navigate('/');
       }
     }
-  }, [user, userRole, authLoading, roleLoading, isSpecialAdmin, navigate]);
+  }, [user, userRole, authLoading, roleLoading, isSpecialAdmin, navigate, toast]);
 
-  // Fetch users and their roles
-  const fetchUsers = async () => {
+  // Memoized fetch functions to prevent unnecessary re-renders
+  const fetchUsers = useCallback(async () => {
     if (!isSpecialAdmin && userRole !== 'admin' && userRole !== 'manager') return;
-
+    
     try {
       setLoading(true);
-      
-      // Get all users from auth (this will only work with service role key)
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-      
-      if (authError) {
-        console.error('Error fetching users:', authError);
-        
-        // Fallback: Get just user roles if we can't get all users
-        const { data: userRoles, error: rolesError } = await supabase
-          .from('user_roles')
-          .select('user_id, role') as { data: { user_id: string, role: UserRole }[], error: any };
-          
-        if (rolesError) {
-          console.error('Error fetching user roles:', rolesError);
-          return;
-        }
-        
-        // Use the roles data we have
-        const usersWithRoles: UserWithRole[] = userRoles?.map(ur => {
-          return {
-            id: ur.user_id,
-            email: `User ${ur.user_id.substring(0, 8)}`, // Use part of ID as placeholder
-            role: ur.role
-          };
-        }) || [];
-        
-        setUsers(usersWithRoles);
-        return;
-      }
+      console.log("Fetching users...");
       
       // Get all user roles
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id, role') as { data: { user_id: string, role: UserRole }[], error: any };
+        .select('user_id, role');
         
       if (rolesError) {
         console.error('Error fetching user roles:', rolesError);
+        setLoading(false);
         return;
       }
       
-      // Map roles to users
-      const usersWithRoles: UserWithRole[] = authUsers?.users?.map(authUser => {
-        const userRoleData = userRoles?.find(ur => ur.user_id === authUser.id);
-        return {
-          id: authUser.id,
-          email: authUser.email || 'No email',
-          role: userRoleData?.role as UserRole || null
-        };
-      }) || [];
+      // Create a simplified user list from roles
+      const usersWithRoles: UserWithRole[] = userRoles?.map((ur: any) => ({
+        id: ur.user_id,
+        email: `User ${ur.user_id.substring(0, 8)}`,
+        role: ur.role as UserRole
+      })) || [];
       
       setUsers(usersWithRoles);
     } catch (error) {
@@ -135,20 +102,20 @@ const AdminPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isSpecialAdmin, userRole]);
 
-  // Fetch audit logs
-  const fetchAuditLogs = async () => {
+  const fetchAuditLogs = useCallback(async () => {
     if (!isSpecialAdmin && userRole !== 'admin') return;
 
     try {
       setLoading(true);
+      console.log("Fetching audit logs...");
       
       const { data, error } = await supabase
         .from('audit_logs')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(50) as { data: any[], error: any };
+        .limit(50);
         
       if (error) {
         console.error('Error fetching audit logs:', error);
@@ -161,12 +128,12 @@ const AdminPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isSpecialAdmin, userRole]);
 
-  // Fetch AI predictions
-  const fetchAIPredictions = async () => {
+  const fetchAIPredictions = useCallback(async () => {
     try {
       setLoading(true);
+      console.log("Fetching AI predictions...");
       
       // Use our helper function to fetch metrics
       const metricsData = await getAIPredictionMetrics();
@@ -177,71 +144,38 @@ const AdminPage = () => {
           durationAccuracy: metricsData.duration_accuracy || 92,
           rescheduleAcceptance: metricsData.reschedule_acceptance || 79
         });
-      } else {
-        // Fallback to demo data if table doesn't exist
-        setPredictionMetrics({
-          noShowAccuracy: 87,
-          durationAccuracy: 92,
-          rescheduleAcceptance: 79
-        });
       }
       
       // Use our helper function to fetch predictions
       const predictionsData = await getAIPredictions(10);
+      setPredictions(predictionsData);
       
-      if (predictionsData && predictionsData.length > 0) {
-        setPredictions(predictionsData);
-      } else {
-        // Use demo data if no predictions are found
-        setPredictions([
-          { 
-            id: '1', 
-            type: 'No-Show', 
-            prediction: 'Low Risk (15%)', 
-            accuracy: 100, 
-            timestamp: new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          },
-          { 
-            id: '2', 
-            type: 'Duration', 
-            prediction: '45 minutes', 
-            accuracy: 78, 
-            timestamp: new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          },
-          { 
-            id: '3', 
-            type: 'Reschedule', 
-            prediction: 'Suggested 3 slots', 
-            accuracy: 90, 
-            timestamp: new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        ]);
-      }
     } catch (error) {
       console.error('Error in fetchAIPredictions:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Load data based on active tab
+  // Load data based on active tab - optimized to prevent multiple calls
   useEffect(() => {
+    if (!user) return; // Don't fetch if no user
+    
     if (isSpecialAdmin || userRole === 'admin' || userRole === 'manager') {
-      if (activeTab === 'users') {
-        fetchUsers();
-      } else if (activeTab === 'audit' && (isSpecialAdmin || userRole === 'admin')) {
-        fetchAuditLogs();
-      } else if (activeTab === 'predictions') {
-        fetchAIPredictions();
-      }
+      const fetchData = async () => {
+        console.log(`Loading data for tab: ${activeTab}`);
+        if (activeTab === 'users') {
+          await fetchUsers();
+        } else if (activeTab === 'audit' && (isSpecialAdmin || userRole === 'admin')) {
+          await fetchAuditLogs();
+        } else if (activeTab === 'predictions') {
+          await fetchAIPredictions();
+        }
+      };
+      
+      fetchData();
     }
-  }, [userRole, activeTab, isSpecialAdmin]);
+  }, [userRole, activeTab, isSpecialAdmin, user, fetchUsers, fetchAuditLogs, fetchAIPredictions]);
 
   // Handle role change
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
