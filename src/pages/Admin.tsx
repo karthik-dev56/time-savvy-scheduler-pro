@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/hooks/useAuth';
 import { useRoleManagement, UserRole, UserRoleData } from '@/hooks/useRoleManagement';
@@ -43,11 +42,19 @@ const AdminPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('users');
+  const location = useLocation();
 
   const isSpecialAdmin = user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin');
 
-  // Redirect if not admin or manager
+  // Redirect if not authenticated
   useEffect(() => {
+    if (!authLoading && !user) {
+      // Redirect to auth page with return path
+      navigate('/auth', { state: { returnPath: '/admin' } });
+      return;
+    }
+    
+    // Redirect if authenticated but not admin or manager
     if (!authLoading && !roleLoading && user) {
       if (!isSpecialAdmin && userRole !== 'admin' && userRole !== 'manager') {
         toast({
@@ -57,10 +64,8 @@ const AdminPage = () => {
         });
         navigate('/');
       }
-    } else if (!authLoading && !user) {
-      navigate('/auth');
     }
-  }, [user, userRole, authLoading, roleLoading, isSpecialAdmin]);
+  }, [user, userRole, authLoading, roleLoading, isSpecialAdmin, navigate]);
 
   // Fetch users and their roles
   const fetchUsers = async () => {
