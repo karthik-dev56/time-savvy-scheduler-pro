@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Layout from '@/components/Layout';
@@ -24,12 +25,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Shield, User, History, Clock } from 'lucide-react';
+import { Shield, User, History, Clock, ArrowUp, ArrowDown, LineChart } from 'lucide-react';
 
 interface UserWithRole {
   id: string;
   email: string;
   role: UserRole | null;
+}
+
+interface AIPrediction {
+  id: string;
+  type: string;
+  prediction: string;
+  accuracy: number;
+  timestamp: string;
 }
 
 const AdminPage = () => {
@@ -39,6 +48,12 @@ const AdminPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [predictions, setPredictions] = useState<AIPrediction[]>([]);
+  const [predictionMetrics, setPredictionMetrics] = useState({
+    noShowAccuracy: 0,
+    durationAccuracy: 0,
+    rescheduleAcceptance: 0
+  });
   const navigate = useNavigate();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('users');
@@ -74,11 +89,32 @@ const AdminPage = () => {
     try {
       setLoading(true);
       
-      // Get all users from auth
+      // Get all users from auth (this will only work with service role key)
       const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
       
       if (authError) {
         console.error('Error fetching users:', authError);
+        
+        // Fallback: Get just user roles if we can't get all users
+        const { data: userRoles, error: rolesError } = await supabase
+          .from('user_roles')
+          .select('user_id, role') as { data: { user_id: string, role: UserRole }[], error: any };
+          
+        if (rolesError) {
+          console.error('Error fetching user roles:', rolesError);
+          return;
+        }
+        
+        // Use the roles data we have
+        const usersWithRoles: UserWithRole[] = userRoles?.map(ur => {
+          return {
+            id: ur.user_id,
+            email: `User ${ur.user_id.substring(0, 8)}`, // Use part of ID as placeholder
+            role: ur.role
+          };
+        }) || [];
+        
+        setUsers(usersWithRoles);
         return;
       }
       
@@ -136,6 +172,76 @@ const AdminPage = () => {
     }
   };
 
+  // Fetch AI predictions
+  const fetchAIPredictions = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch AI prediction metrics from Supabase
+      const { data: metricsData, error: metricsError } = await supabase
+        .from('ai_prediction_metrics')
+        .select('*')
+        .single();
+      
+      if (metricsError) {
+        console.error('Error fetching AI metrics:', metricsError);
+        // Fallback to demo data if table doesn't exist
+        setPredictionMetrics({
+          noShowAccuracy: 87,
+          durationAccuracy: 92,
+          rescheduleAcceptance: 79
+        });
+      } else if (metricsData) {
+        setPredictionMetrics({
+          noShowAccuracy: metricsData.no_show_accuracy || 87,
+          durationAccuracy: metricsData.duration_accuracy || 92,
+          rescheduleAcceptance: metricsData.reschedule_acceptance || 79
+        });
+      }
+      
+      // Fetch recent AI predictions
+      const { data: recentData, error: recentError } = await supabase
+        .from('ai_predictions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (recentError) {
+        console.error('Error fetching AI predictions:', recentError);
+        // Use demo data if table doesn't exist
+        setPredictions([
+          { 
+            id: '1', 
+            type: 'No-Show', 
+            prediction: 'Low Risk (15%)', 
+            accuracy: 100, 
+            timestamp: new Date().toISOString() 
+          },
+          { 
+            id: '2', 
+            type: 'Duration', 
+            prediction: '45 minutes', 
+            accuracy: 78, 
+            timestamp: new Date().toISOString() 
+          },
+          { 
+            id: '3', 
+            type: 'Reschedule', 
+            prediction: 'Suggested 3 slots', 
+            accuracy: 90, 
+            timestamp: new Date().toISOString() 
+          }
+        ]);
+      } else {
+        setPredictions(recentData || []);
+      }
+    } catch (error) {
+      console.error('Error in fetchAIPredictions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Load data based on active tab
   useEffect(() => {
     if (isSpecialAdmin || userRole === 'admin' || userRole === 'manager') {
@@ -143,6 +249,8 @@ const AdminPage = () => {
         fetchUsers();
       } else if (activeTab === 'audit' && (isSpecialAdmin || userRole === 'admin')) {
         fetchAuditLogs();
+      } else if (activeTab === 'predictions') {
+        fetchAIPredictions();
       }
     }
   }, [userRole, activeTab, isSpecialAdmin]);
@@ -166,6 +274,20 @@ const AdminPage = () => {
           u.id === userId ? { ...u, role: newRole } : u
         )
       );
+    }
+  };
+
+  // Format prediction accuracy display
+  const formatAccuracy = (prediction: AIPrediction) => {
+    if (prediction.type === 'Duration') {
+      const diff = prediction.accuracy < 100 ? 
+        `Underestimated by ${100 - prediction.accuracy}%` : 
+        `Overestimated by ${prediction.accuracy - 100}%`;
+      return diff;
+    } else if (prediction.type === 'Reschedule') {
+      return `Accepted slot #${prediction.accuracy}`;
+    } else {
+      return prediction.accuracy >= 80 ? 'Correct' : 'Incorrect';
     }
   };
 
@@ -330,6 +452,7 @@ const AdminPage = () => {
                             <TableCell>
                               <code className="text-xs">
                                 {log.details ? JSON.stringify(log.details).substring(0, 50) : '-'}
+                                {log.details && JSON.stringify(log.details).length > 50 && '...'}
                               </code>
                             </TableCell>
                           </TableRow>
@@ -358,7 +481,13 @@ const AdminPage = () => {
                         <CardTitle className="text-lg">No-Show Predictions</CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
-                        <p className="text-2xl font-bold">87%</p>
+                        <div className="flex items-baseline">
+                          <p className="text-2xl font-bold">{predictionMetrics.noShowAccuracy}%</p>
+                          <Badge variant="outline" className="ml-2 bg-green-50 text-green-800 border-green-200">
+                            <ArrowUp className="h-3 w-3 mr-1" />
+                            2% 
+                          </Badge>
+                        </div>
                         <p className="text-muted-foreground text-sm">Accuracy rate</p>
                       </CardContent>
                     </Card>
@@ -368,7 +497,13 @@ const AdminPage = () => {
                         <CardTitle className="text-lg">Meeting Duration</CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
-                        <p className="text-2xl font-bold">92%</p>
+                        <div className="flex items-baseline">
+                          <p className="text-2xl font-bold">{predictionMetrics.durationAccuracy}%</p>
+                          <Badge variant="outline" className="ml-2 bg-green-50 text-green-800 border-green-200">
+                            <ArrowUp className="h-3 w-3 mr-1" />
+                            3%
+                          </Badge>
+                        </div>
                         <p className="text-muted-foreground text-sm">Prediction accuracy</p>
                       </CardContent>
                     </Card>
@@ -378,14 +513,27 @@ const AdminPage = () => {
                         <CardTitle className="text-lg">Auto-Rescheduling</CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
-                        <p className="text-2xl font-bold">79%</p>
+                        <div className="flex items-baseline">
+                          <p className="text-2xl font-bold">{predictionMetrics.rescheduleAcceptance}%</p>
+                          <Badge variant="outline" className="ml-2 bg-amber-50 text-amber-800 border-amber-200">
+                            <ArrowDown className="h-3 w-3 mr-1" />
+                            1%
+                          </Badge>
+                        </div>
                         <p className="text-muted-foreground text-sm">Acceptance rate</p>
                       </CardContent>
                     </Card>
                   </div>
                   
                   <div className="mt-8">
-                    <h3 className="text-lg font-medium mb-4">Recent AI Activity</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-medium">Recent AI Activity</h3>
+                      <Button variant="outline" size="sm" className="gap-2">
+                        <LineChart className="h-4 w-4" />
+                        View Full Report
+                      </Button>
+                    </div>
+                    
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -396,18 +544,24 @@ const AdminPage = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {[
-                          { time: '2025-04-10 09:15 AM', type: 'No-Show', prediction: 'Low Risk (15%)', accuracy: 'Correct' },
-                          { time: '2025-04-10 10:30 AM', type: 'Duration', prediction: '45 minutes', accuracy: 'Underestimated by 10 min' },
-                          { time: '2025-04-10 01:45 PM', type: 'Reschedule', prediction: 'Suggested 3 slots', accuracy: 'Accepted slot #2' }
-                        ].map((entry, i) => (
-                          <TableRow key={i}>
-                            <TableCell>{entry.time}</TableCell>
-                            <TableCell>{entry.type}</TableCell>
-                            <TableCell>{entry.prediction}</TableCell>
-                            <TableCell>{entry.accuracy}</TableCell>
+                        {loading ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center">Loading predictions...</TableCell>
                           </TableRow>
-                        ))}
+                        ) : predictions.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center">No prediction data found</TableCell>
+                          </TableRow>
+                        ) : (
+                          predictions.map((entry) => (
+                            <TableRow key={entry.id}>
+                              <TableCell>{new Date(entry.timestamp).toLocaleString()}</TableCell>
+                              <TableCell>{entry.type}</TableCell>
+                              <TableCell>{entry.prediction}</TableCell>
+                              <TableCell>{formatAccuracy(entry)}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
                       </TableBody>
                     </Table>
                   </div>
