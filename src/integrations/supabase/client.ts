@@ -118,7 +118,7 @@ export const getAIPredictionMetrics = async (): Promise<AIPredictionMetrics | nu
     if (error) {
       console.error('Error fetching AI metrics:', error);
       console.log("Using demo data for AI prediction metrics");
-      return {
+      const demoData: AIPredictionMetrics = {
         id: 'demo',
         no_show_accuracy: 87,
         duration_accuracy: 92,
@@ -126,15 +126,30 @@ export const getAIPredictionMetrics = async (): Promise<AIPredictionMetrics | nu
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
+      return demoData;
     }
     
     console.log("Successfully fetched AI prediction metrics:", data);
-    // Explicitly cast to AIPredictionMetrics to ensure TypeScript knows the shape
-    return data as AIPredictionMetrics;
+    // Make sure we're working with the correct shape
+    if (!data) {
+      throw new Error('No AI metrics data returned');
+    }
+    
+    // Explicitly cast and validate the data structure
+    const metrics: AIPredictionMetrics = {
+      id: data.id || 'unknown',
+      no_show_accuracy: typeof data.no_show_accuracy === 'number' ? data.no_show_accuracy : 87,
+      duration_accuracy: typeof data.duration_accuracy === 'number' ? data.duration_accuracy : 92,
+      reschedule_acceptance: typeof data.reschedule_acceptance === 'number' ? data.reschedule_acceptance : 79,
+      created_at: data.created_at || new Date().toISOString(),
+      updated_at: data.updated_at || new Date().toISOString()
+    };
+    
+    return metrics;
   } catch (err) {
     console.error('Unexpected error fetching AI metrics:', err);
-    // Return demo data as fallback
-    return {
+    // Return demo data as fallback with explicit typing
+    const demoData: AIPredictionMetrics = {
       id: 'demo',
       no_show_accuracy: 87,
       duration_accuracy: 92,
@@ -142,6 +157,7 @@ export const getAIPredictionMetrics = async (): Promise<AIPredictionMetrics | nu
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+    return demoData;
   }
 };
 

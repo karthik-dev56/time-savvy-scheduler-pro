@@ -41,11 +41,13 @@ interface AuditLogEntry {
   created_at: string;
 }
 
-const defaultPredictionMetrics: {
+interface PredictionMetricsState {
   noShowAccuracy: number;
   durationAccuracy: number;
   rescheduleAcceptance: number;
-} = {
+}
+
+const defaultPredictionMetrics: PredictionMetricsState = {
   noShowAccuracy: 0,
   durationAccuracy: 0,
   rescheduleAcceptance: 0
@@ -68,7 +70,7 @@ const AdminPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [predictions, setPredictions] = useState<AIPrediction[]>([]);
-  const [predictionMetrics, setPredictionMetrics] = useState(defaultPredictionMetrics);
+  const [predictionMetrics, setPredictionMetrics] = useState<PredictionMetricsState>(defaultPredictionMetrics);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('users');
