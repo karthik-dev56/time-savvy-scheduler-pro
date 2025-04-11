@@ -345,10 +345,12 @@ const AdminPage = () => {
       
       if (metricsData) {
         setPredictionMetrics({
-          noShowAccuracy: metricsData.no_show_accuracy || 87,
-          durationAccuracy: metricsData.duration_accuracy || 92,
-          rescheduleAcceptance: metricsData.reschedule_acceptance || 79
+          noShowAccuracy: metricsData.no_show_accuracy,
+          durationAccuracy: metricsData.duration_accuracy,
+          rescheduleAcceptance: metricsData.reschedule_acceptance
         });
+      } else {
+        setPredictionMetrics(defaultPredictionMetrics);
       }
       
       const predictionsData = await getAIPredictions(10);
@@ -356,6 +358,7 @@ const AdminPage = () => {
       
     } catch (error) {
       console.error('Error in fetchAIPredictions:', error);
+      setPredictionMetrics(defaultPredictionMetrics);
     }
   }, []);
 

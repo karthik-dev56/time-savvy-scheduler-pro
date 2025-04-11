@@ -129,6 +129,7 @@ export const getAIPredictionMetrics = async (): Promise<AIPredictionMetrics | nu
     }
     
     console.log("Successfully fetched AI prediction metrics:", data);
+    // Explicitly cast to AIPredictionMetrics to ensure TypeScript knows the shape
     return data as AIPredictionMetrics;
   } catch (err) {
     console.error('Unexpected error fetching AI metrics:', err);
