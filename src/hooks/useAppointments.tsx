@@ -27,9 +27,11 @@ export function useAppointments() {
       setLoading(true);
       console.log("Fetching appointments for user:", user.id);
       
+      // Get current user's appointments
       const { data, error } = await supabase
         .from('appointments')
         .select('*')
+        .eq('user_id', user.id)  // Filter to only show current user's appointments
         .order('start_time', { ascending: true });
 
       if (error) {
@@ -116,7 +118,8 @@ export function useAppointments() {
         { 
           event: '*', 
           schema: 'public', 
-          table: 'appointments' 
+          table: 'appointments',
+          filter: `user_id=eq.${user.id}`  // Filter to only get updates for current user's appointments
         }, 
         (payload) => {
           console.log("Received realtime update for appointments:", payload);

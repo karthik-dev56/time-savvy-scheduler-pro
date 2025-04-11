@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, Users } from "lucide-react";
@@ -7,11 +7,13 @@ import { format, addDays, startOfWeek, eachDayOfInterval, parseISO, isSameDay } 
 import { useAppointments } from '@/hooks/useAppointments';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 
 const AppointmentCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const { appointments, loading } = useAppointments();
+  const { appointments, loading, fetchAppointments } = useAppointments();
   const navigate = useNavigate();
+  const { toast } = useToast();
   
   const weekStart = useMemo(() => 
     startOfWeek(currentDate, { weekStartsOn: 1 }), 
@@ -28,6 +30,16 @@ const AppointmentCalendar = () => {
 
   // Time slots for the day
   const timeSlots = Array.from({ length: 12 }, (_, i) => i + 8); // 8AM to 7PM
+  
+  // Force refresh appointments when component mounts or changes week
+  useEffect(() => {
+    fetchAppointments();
+    // Debug log the appointments
+    console.log("Calendar view appointments:", appointments.length);
+    appointments.forEach(apt => {
+      console.log(`Appointment: ${apt.title}, ${apt.start_time}`);
+    });
+  }, [weekStart]);
 
   const prevWeek = () => {
     setCurrentDate(addDays(currentDate, -7));
@@ -49,9 +61,14 @@ const AppointmentCalendar = () => {
     if (loading) return [];
     
     return appointments.filter(apt => {
-      const aptDate = parseISO(apt.start_time);
-      const aptHour = aptDate.getHours();
-      return aptHour === time && isSameDay(aptDate, day);
+      try {
+        const aptDate = parseISO(apt.start_time);
+        const aptHour = aptDate.getHours();
+        return aptHour === time && isSameDay(aptDate, day);
+      } catch (error) {
+        console.error("Error parsing appointment date:", error, apt);
+        return false;
+      }
     });
   };
 
@@ -66,6 +83,15 @@ const AppointmentCalendar = () => {
       case 'low': return 'bg-blue-50 text-blue-800';
       default: return 'bg-gray-50 text-gray-800';
     }
+  };
+
+  // Manual refresh function
+  const refreshCalendar = () => {
+    fetchAppointments();
+    toast({
+      title: "Calendar refreshed",
+      description: "Your appointments have been refreshed.",
+    });
   };
 
   return (
@@ -89,6 +115,9 @@ const AppointmentCalendar = () => {
           <Button size="sm" onClick={goToNewAppointment}>
             <Plus className="h-4 w-4 mr-2" />
             New Appointment
+          </Button>
+          <Button size="sm" variant="outline" onClick={refreshCalendar}>
+            Refresh
           </Button>
         </div>
       </div>
