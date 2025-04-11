@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +26,7 @@ import {
 
 const AdminPage = () => {
   const { user } = useAuth();
-  const { checkRole, userRole } = useRoleManagement();
+  const { hasRole, userRole } = useRoleManagement();
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -45,7 +44,7 @@ const AdminPage = () => {
         return;
       }
       
-      const isAdmin = await checkRole('admin');
+      const isAdmin = hasRole('admin');
       
       if (!isAdmin) {
         toast({
@@ -58,7 +57,7 @@ const AdminPage = () => {
     };
     
     checkAdminAccess();
-  }, [user, checkRole, navigate, toast]);
+  }, [user, hasRole, navigate, toast]);
   
   // Fetch AI metrics and predictions
   useEffect(() => {
