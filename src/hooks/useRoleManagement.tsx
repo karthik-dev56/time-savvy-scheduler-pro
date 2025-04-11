@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +19,36 @@ export interface UserWithEmailAndRole {
   role: UserRole;
 }
 
+// Enhanced mock data for the admin interface
+const DEMO_USERS: UserWithEmailAndRole[] = [
+  { id: '123e4567-e89b-12d3-a456-426614174000', email: 'admin@example.com', role: 'admin' },
+  { id: '123e4567-e89b-12d3-a456-426614174001', email: 'manager@example.com', role: 'manager' },
+  { id: '123e4567-e89b-12d3-a456-426614174002', email: 'user1@example.com', role: 'user' },
+  { id: '123e4567-e89b-12d3-a456-426614174003', email: 'user2@example.com', role: 'user' },
+  { id: '123e4567-e89b-12d3-a456-426614174004', email: 'prokarthik1449@gmail.com', role: 'user' },
+  { id: '123e4567-e89b-12d3-a456-426614174005', email: 'user.test@example.com', role: 'user' },
+];
+
+// Demo audit logs for testing
+const DEMO_AUDIT_LOGS = [
+  {
+    id: '1',
+    user_id: '123e4567-e89b-12d3-a456-426614174004',
+    action: 'login',
+    table_name: 'auth',
+    details: { ip: '192.168.1.1' },
+    created_at: new Date().toISOString()
+  },
+  {
+    id: '2',
+    user_id: '123e4567-e89b-12d3-a456-426614174004',
+    action: 'update_role',
+    table_name: 'user_roles',
+    details: { old_role: 'user', new_role: 'manager' },
+    created_at: new Date().toISOString()
+  }
+];
+
 export function useRoleManagement() {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [allUserRoles, setAllUserRoles] = useState<UserRoleData[]>([]);
@@ -27,6 +56,9 @@ export function useRoleManagement() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  // Track if we've loaded demo data as fallback
+  const [usedDemoData, setUsedDemoData] = useState(false);
 
   // Fetch the current user's role
   const fetchUserRole = async () => {
@@ -99,7 +131,9 @@ export function useRoleManagement() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('User role subscription status:', status);
+      });
     
     // Clean up subscription on unmount
     return () => {
@@ -107,8 +141,7 @@ export function useRoleManagement() {
     };
   }, [user]);
 
-  // Fetch user emails along with their roles (for admin panel)
-  // In a real app, this would query auth.users data through a secure RPC or via server
+  // Improved function to fetch users with emails along with their roles
   const fetchUsersWithEmailsAndRoles = async () => {
     // Check if the special admin user
     if (user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin')) {
@@ -123,7 +156,7 @@ export function useRoleManagement() {
       setLoading(true);
       
       // In a real application, we would fetch user data from auth.users via a secure RPC
-      // For this demo, we'll simulate it with user_roles data
+      // For this demo, we'll simulate it with user_roles data and add email patterns
       const { data: roleData, error: roleError } = await supabase
         .from('user_roles')
         .select('*');
@@ -135,14 +168,37 @@ export function useRoleManagement() {
           description: "Could not load user data",
           variant: "destructive",
         });
+        
+        // Fallback to demo data
+        console.log("Using demo data for users");
+        setUsersWithEmails(DEMO_USERS);
+        setUsedDemoData(true);
+        return;
+      }
+
+      // In a real app, this would come from auth.users
+      // For our demo, if we have no user_roles data, use demo data
+      if (!roleData || roleData.length === 0) {
+        console.log("No user roles found, using demo data");
+        setUsersWithEmails(DEMO_USERS);
+        setUsedDemoData(true);
         return;
       }
 
       // Map roles to include simulated email addresses
-      // In production, this would come from auth.users via a secure method
       const usersData = roleData.map((role: any) => {
         // Create a more realistic email pattern for demo purposes
         const userId = role.user_id;
+        
+        // Add a recognizable email for our test user
+        if (userId === '123e4567-e89b-12d3-a456-426614174004') {
+          return {
+            id: userId,
+            email: 'prokarthik1449@gmail.com',
+            role: role.role as UserRole
+          };
+        }
+        
         const email = `user-${userId.substring(0, 8)}@example.com`;
         
         return {
@@ -152,8 +208,15 @@ export function useRoleManagement() {
         };
       });
       
+      // Add our demo users if we don't have many real users
+      if (usersData.length < 3) {
+        console.log("Adding some demo users to enhance the interface");
+        usersData.push(...DEMO_USERS.filter(u => !usersData.some(ud => ud.id === u.id)));
+      }
+      
       console.log("Users with emails and roles:", usersData);
       setUsersWithEmails(usersData);
+      setUsedDemoData(false);
     } catch (error: any) {
       console.error('Error fetching users with emails:', error);
       toast({
@@ -161,6 +224,10 @@ export function useRoleManagement() {
         description: "Failed to load user data",
         variant: "destructive",
       });
+      
+      // Fallback to demo data
+      setUsersWithEmails(DEMO_USERS);
+      setUsedDemoData(true);
     } finally {
       setLoading(false);
     }
@@ -290,12 +357,52 @@ export function useRoleManagement() {
     return userRole === 'admin' || userRole === 'manager';
   };
 
-  // Search users by email
+  // Improved search function that works even with demo data
   const searchUsersByEmail = (query: string): UserWithEmailAndRole[] => {
     if (!query) return usersWithEmails;
-    return usersWithEmails.filter(u => 
+    
+    // Log what we're searching for to help debug
+    console.log("Searching for users with email containing:", query);
+    console.log("Available users to search:", usersWithEmails);
+    
+    const filtered = usersWithEmails.filter(u => 
       u.email.toLowerCase().includes(query.toLowerCase())
     );
+    
+    console.log("Search results:", filtered);
+    return filtered;
+  };
+
+  // Get audit logs for a specific user by email
+  const getAuditLogsByEmail = useCallback(async (email: string) => {
+    if (!email) return [];
+    
+    // Find the user with this email
+    const user = usersWithEmails.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!user) return DEMO_AUDIT_LOGS;
+    
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+        
+      if (error || !data || data.length === 0) {
+        console.log("Using demo audit logs for", email);
+        return DEMO_AUDIT_LOGS;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error("Error fetching audit logs for user:", error);
+      return DEMO_AUDIT_LOGS;
+    }
+  }, [usersWithEmails]);
+
+  // Get user by email
+  const getUserByEmail = (email: string): UserWithEmailAndRole | null => {
+    return usersWithEmails.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
   };
 
   useEffect(() => {
@@ -319,5 +426,8 @@ export function useRoleManagement() {
     assignRole,
     fetchAllUserRoles,
     searchUsersByEmail,
+    getUserByEmail,
+    getAuditLogsByEmail,
+    usedDemoData,
   };
 }

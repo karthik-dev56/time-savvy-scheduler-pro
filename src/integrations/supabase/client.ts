@@ -30,9 +30,13 @@ const setupRealtimeTables = async () => {
   try {
     console.log("Setting up realtime subscription for admin tables...");
     
-    // Instead of using RPC, we'll use direct channel configuration
-    // to enable realtime for these tables
-    const channel = supabase.channel('admin-tables-changes')
+    // Use a single channel for all tables to improve performance and connection handling
+    const channel = supabase.channel('admin-tables-changes', {
+      config: {
+        broadcast: { self: true }, // Make sure we receive our own changes too
+        presence: { key: 'admin-ui' }, // Enable presence features
+      }
+    })
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
@@ -63,10 +67,14 @@ const setupRealtimeTables = async () => {
       })
       .subscribe((status) => {
         console.log('Realtime subscription status:', status);
+        // Notify that the channel is ready if successfully subscribed
+        if (status === 'SUBSCRIBED') {
+          console.log('🟢 Realtime enabled for admin tables');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('🔴 Error subscribing to realtime events');
+        }
       });
       
-    console.log('Realtime enabled for admin tables');
-    
     // Return the channel to allow for cleanup if needed
     return channel;
   } catch (err) {

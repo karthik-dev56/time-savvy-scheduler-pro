@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
@@ -25,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Shield, User, History, Clock, ArrowUp, ArrowDown, LineChart } from 'lucide-react';
+import { Shield, User, History, Clock, ArrowUp, ArrowDown, LineChart, Search, UserCheck, RefreshCw } from 'lucide-react';
 
 interface UserWithRole {
   id: string;
@@ -44,7 +43,16 @@ interface AuditLogEntry {
 
 const AdminPage = () => {
   const { user, loading: authLoading } = useAuth();
-  const { userRole, loading: roleLoading, assignRole, allUserRoles } = useRoleManagement();
+  const { 
+    userRole, 
+    loading: roleLoading, 
+    assignRole, 
+    allUserRoles, 
+    searchUsersByEmail, 
+    getAuditLogsByEmail,
+    getUserByEmail,
+    usedDemoData
+  } = useRoleManagement();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,10 +66,11 @@ const AdminPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('users');
+  const [selectedUser, setSelectedUser] = useState<UserWithRole | null>(null);
+  const [refresh, setRefresh] = useState(0);
 
   const isSpecialAdmin = user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin');
 
-  // Redirect if not authenticated - optimized to prevent unnecessary redirects
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth', { state: { returnPath: '/admin' } });
@@ -80,36 +89,64 @@ const AdminPage = () => {
     }
   }, [user, userRole, authLoading, roleLoading, isSpecialAdmin, navigate, toast]);
 
-  // Set up real-time subscription for user roles
   useEffect(() => {
     if (!user || (!isSpecialAdmin && userRole !== 'admin' && userRole !== 'manager')) return;
     
     console.log("Setting up real-time subscription for user roles");
     
-    // Subscribe to changes in the user_roles table
     const channel = supabase
       .channel('admin-user-roles-changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'user_roles' }, 
         (payload) => {
           console.log('Real-time update received for user_roles:', payload);
-          updateUserRolesFromRealtime();
+          
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            updateUserFromRealtimeEvent(payload.new);
+          } else if (payload.eventType === 'DELETE') {
+            updateUserRolesFromRealtime();
+          }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('User roles subscription status:', status);
+      });
       
-    // Clean up subscription on unmount
     return () => {
       supabase.removeChannel(channel);
     };
   }, [user, userRole, isSpecialAdmin]);
   
-  // Function to update users when real-time changes occur
+  const updateUserFromRealtimeEvent = (userData: any) => {
+    if (!userData || !userData.user_id || !userData.role) return;
+    
+    setUsers(prevUsers => {
+      const userIndex = prevUsers.findIndex(u => u.id === userData.user_id);
+      
+      if (userIndex >= 0) {
+        const updatedUsers = [...prevUsers];
+        updatedUsers[userIndex] = {
+          ...updatedUsers[userIndex],
+          role: userData.role
+        };
+        return updatedUsers;
+      } else {
+        return [
+          ...prevUsers,
+          {
+            id: userData.user_id,
+            email: `user-${userData.user_id.substring(0, 8)}@example.com`,
+            role: userData.role
+          }
+        ];
+      }
+    });
+  };
+  
   const updateUserRolesFromRealtime = useCallback(async () => {
     try {
       console.log("Updating user roles from realtime event");
       
-      // Get all user roles
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role');
@@ -119,7 +156,6 @@ const AdminPage = () => {
         return;
       }
       
-      // Create a simplified user list from roles
       const usersWithRoles: UserWithRole[] = userRoles?.map((ur: any) => ({
         id: ur.user_id,
         email: `User ${ur.user_id.substring(0, 8)}`,
@@ -132,32 +168,81 @@ const AdminPage = () => {
     }
   }, []);
 
-  // Set up real-time subscription for audit logs
   useEffect(() => {
     if (!user || (!isSpecialAdmin && userRole !== 'admin')) return;
     if (activeTab !== 'audit') return;
     
     console.log("Setting up real-time subscription for audit logs");
     
-    // Subscribe to changes in the audit_logs table
     const channel = supabase
       .channel('admin-audit-logs-changes')
       .on('postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'audit_logs' }, 
         (payload) => {
           console.log('Real-time update received for audit_logs:', payload);
-          setAuditLogs(prevLogs => [payload.new as any, ...prevLogs.slice(0, 49)]);
+          
+          if (selectedUser && payload.new && payload.new.user_id === selectedUser.id) {
+            setAuditLogs(prevLogs => [payload.new as any, ...prevLogs.slice(0, 49)]);
+          } else if (searchQuery && payload.new) {
+            const foundUser = getUserByEmail(searchQuery);
+            if (foundUser && foundUser.id === payload.new.user_id) {
+              setAuditLogs(prevLogs => [payload.new as any, ...prevLogs.slice(0, 49)]);
+            }
+          } else if (!selectedUser && !searchQuery) {
+            setAuditLogs(prevLogs => [payload.new as any, ...prevLogs.slice(0, 49)]);
+          }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Audit logs subscription status:', status);
+      });
       
-    // Clean up subscription on unmount
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, userRole, isSpecialAdmin, activeTab]);
+  }, [user, userRole, isSpecialAdmin, activeTab, selectedUser, searchQuery, getUserByEmail]);
 
-  // Initial data loading based on active tab - optimized to prevent multiple calls
+  useEffect(() => {
+    if (!user) return;
+    if (activeTab !== 'predictions') return;
+    
+    console.log("Setting up real-time subscription for AI predictions");
+    
+    const channel = supabase
+      .channel('admin-ai-predictions-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'ai_predictions' }, 
+        (payload) => {
+          console.log('Real-time update received for ai_predictions:', payload);
+          
+          if (payload.eventType === 'INSERT') {
+            setPredictions(prev => [payload.new as any, ...prev.slice(0, 9)]);
+          }
+        }
+      )
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'ai_prediction_metrics' }, 
+        (payload) => {
+          console.log('Real-time update received for ai_prediction_metrics:', payload);
+          
+          if (payload.new) {
+            setPredictionMetrics({
+              noShowAccuracy: payload.new.no_show_accuracy || 87,
+              durationAccuracy: payload.new.duration_accuracy || 92,
+              rescheduleAcceptance: payload.new.reschedule_acceptance || 79
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('AI predictions subscription status:', status);
+      });
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, activeTab]);
+
   useEffect(() => {
     if (!user) return; // Don't fetch if no user
     
@@ -188,78 +273,49 @@ const AdminPage = () => {
       
       fetchData();
     }
-  }, [userRole, activeTab, isSpecialAdmin, user]);
+  }, [userRole, activeTab, isSpecialAdmin, user, refresh]);
 
-  // Improved fetch users function that gets actual emails from auth
   const fetchUsers = useCallback(async () => {
     if (!isSpecialAdmin && userRole !== 'admin' && userRole !== 'manager') return;
     
     try {
       console.log("Fetching users with proper email data...");
       
-      // First get all user roles
-      const { data: userRoles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id, role');
-        
-      if (rolesError) {
-        console.error('Error fetching user roles:', rolesError);
-        return;
+      const filteredUsers = searchUsersByEmail(searchQuery);
+      console.log("Fetched users with roles:", filteredUsers);
+      setUsers(filteredUsers);
+      
+      if (searchQuery && filteredUsers.length === 1) {
+        setSelectedUser(filteredUsers[0]);
       }
-      
-      // Map of user_id to role for quick lookup
-      const roleMap = new Map();
-      userRoles?.forEach((ur: any) => {
-        roleMap.set(ur.user_id, ur.role);
-      });
-      
-      // Process user roles to include emails
-      const usersWithRoles: UserWithRole[] = userRoles?.map((ur: any) => {
-        // For demo purposes, create a more realistic email pattern
-        // In production, this would come from auth.users which we can't directly query
-        const userId = ur.user_id;
-        const email = `user-${userId.substring(0, 8)}@example.com`;
-        
-        return {
-          id: userId,
-          email: email,
-          role: ur.role as UserRole
-        };
-      }) || [];
-      
-      console.log("Fetched users with roles:", usersWithRoles);
-      setUsers(usersWithRoles);
     } catch (error) {
       console.error('Error in fetchUsers:', error);
     }
-  }, [isSpecialAdmin, userRole]);
+  }, [isSpecialAdmin, userRole, searchUsersByEmail, searchQuery]);
 
-  // Improved audit logs fetch that includes filtering by user
   const fetchAuditLogs = useCallback(async () => {
     if (!isSpecialAdmin && userRole !== 'admin') return;
 
     try {
       console.log("Fetching audit logs...");
       
-      let query = supabase
-        .from('audit_logs')
-        .select('*');
-      
-      // Filter by user_id if we're searching by email
-      if (searchQuery && activeTab === 'audit') {
-        // Find matching users
-        const matchingUsers = users.filter(u => 
-          u.email.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        
-        if (matchingUsers.length > 0) {
-          const userIds = matchingUsers.map(u => u.id);
-          query = query.in('user_id', userIds);
-          console.log("Filtering audit logs by user IDs:", userIds);
-        }
+      if (searchQuery) {
+        console.log(`Fetching audit logs for search: ${searchQuery}`);
+        const logs = await getAuditLogsByEmail(searchQuery);
+        setAuditLogs(logs || []);
+        return;
       }
       
-      const { data, error } = await query
+      if (selectedUser) {
+        console.log(`Fetching audit logs for selected user: ${selectedUser.email}`);
+        const logs = await getAuditLogsByEmail(selectedUser.email);
+        setAuditLogs(logs || []);
+        return;
+      }
+      
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(50);
         
@@ -273,14 +329,12 @@ const AdminPage = () => {
     } catch (error) {
       console.error('Error in fetchAuditLogs:', error);
     }
-  }, [isSpecialAdmin, userRole, searchQuery, activeTab, users]);
+  }, [isSpecialAdmin, userRole, searchQuery, selectedUser, getAuditLogsByEmail]);
 
-  // Improved AI predictions fetch with filtering
   const fetchAIPredictions = useCallback(async () => {
     try {
       console.log("Fetching AI predictions...");
       
-      // Use our helper function to fetch metrics
       const metricsData = await getAIPredictionMetrics();
       
       if (metricsData) {
@@ -291,25 +345,29 @@ const AdminPage = () => {
         });
       }
       
-      // Use our helper function to fetch predictions
-      // In a real app, we would filter by a user_id field on the predictions table
       const predictionsData = await getAIPredictions(10);
-      setPredictions(predictionsData);
+      
+      if (searchQuery || selectedUser) {
+        setPredictions(predictionsData);
+      } else {
+        setPredictions(predictionsData);
+      }
       
     } catch (error) {
       console.error('Error in fetchAIPredictions:', error);
     }
-  }, []);
+  }, [searchQuery, selectedUser]);
 
-  // Effect to refetch filtered data when search query changes
   useEffect(() => {
-    // This ensures data is properly filtered when search query changes
-    if (searchQuery && activeTab === 'audit') {
+    if (activeTab === 'users') {
+      fetchUsers();
+    } else if (searchQuery && activeTab === 'audit') {
       fetchAuditLogs();
+    } else if (activeTab === 'predictions') {
+      fetchAIPredictions();
     }
-  }, [searchQuery, activeTab, fetchAuditLogs]);
+  }, [searchQuery, activeTab, fetchUsers, fetchAuditLogs, fetchAIPredictions]);
 
-  // Handle role change
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
     if (!isSpecialAdmin && userRole !== 'admin') {
       toast({
@@ -327,8 +385,6 @@ const AdminPage = () => {
         description: `User role changed to ${newRole}`,
       });
       
-      // The real-time subscription will update the users list
-      // This fallback updates the local state if real-time fails
       setUsers(prevUsers => 
         prevUsers.map(u => 
           u.id === userId ? { ...u, role: newRole } : u
@@ -337,7 +393,19 @@ const AdminPage = () => {
     }
   };
 
-  // Format prediction accuracy display
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSelectedUser(null);
+  };
+
+  const handleRefresh = () => {
+    setRefresh(prev => prev + 1);
+    toast({
+      title: "Refreshing",
+      description: "Updating data from the server...",
+    });
+  };
+
   const formatAccuracy = (prediction: AIPrediction) => {
     if (prediction.type === 'Duration') {
       const diff = prediction.accuracy < 100 ? 
@@ -351,17 +419,13 @@ const AdminPage = () => {
     }
   };
 
-  // Get user email by ID for audit logs
   const getUserEmailById = (userId: string | null): string => {
     if (!userId) return 'System';
     const foundUser = users.find(u => u.id === userId);
     return foundUser ? foundUser.email : `User ${userId.substring(0, 8)}`;
   };
 
-  // Filter users by search query
-  const filteredUsers = searchQuery 
-    ? users.filter(u => u.email.toLowerCase().includes(searchQuery.toLowerCase()))
-    : users;
+  const filteredUsers = users;
 
   if (authLoading || roleLoading) {
     return (
@@ -373,27 +437,38 @@ const AdminPage = () => {
     );
   }
 
-  // Determine what tabs to show based on role
   const isAdmin = isSpecialAdmin || userRole === 'admin';
 
-  // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
     console.log("Search query updated:", value);
   };
 
-  // Handle tab change
   const handleTabChange = (value: string) => {
     setActiveTab(value);
-    // Clearing search on tab change to prevent cross-tab filtering confusion
     setSearchQuery('');
+    setSelectedUser(null);
   };
 
   return (
     <Layout>
       <div className="container max-w-7xl py-10">
-        <h1 className="text-3xl font-bold mb-6">Admin Panel</h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Admin Panel</h1>
+          
+          <div className="flex space-x-2">
+            {usedDemoData && (
+              <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-200">
+                Using Demo Data
+              </Badge>
+            )}
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Refresh
+            </Button>
+          </div>
+        </div>
         
         <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="mb-6">
@@ -422,13 +497,35 @@ const AdminPage = () => {
                     ? 'Manage users and their permission levels' 
                     : 'View users and their permission levels'}
                 </CardDescription>
-                <div className="mt-4">
-                  <Input
-                    placeholder="Search users by email..."
-                    value={searchQuery}
-                    onChange={handleSearchChange}
-                    className="max-w-sm"
-                  />
+                <div className="mt-4 relative">
+                  <div className="flex gap-2">
+                    <div className="relative flex-grow">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search users by email..."
+                        value={searchQuery}
+                        onChange={handleSearchChange}
+                        className="pl-8"
+                      />
+                    </div>
+                    {searchQuery && (
+                      <Button variant="outline" size="sm" onClick={handleClearSearch}>
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {selectedUser && (
+                    <div className="mt-2 flex items-center">
+                      <Badge className="bg-blue-100 text-blue-800 border-blue-200 flex items-center gap-1">
+                        <UserCheck className="h-3 w-3" />
+                        {selectedUser.email}
+                      </Badge>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedUser(null)} className="h-6 ml-1 p-1">
+                        ×
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -451,7 +548,7 @@ const AdminPage = () => {
                       </TableRow>
                     ) : (
                       filteredUsers.map((user) => (
-                        <TableRow key={user.id}>
+                        <TableRow key={user.id} onClick={() => setSelectedUser(user)} className="cursor-pointer">
                           <TableCell>{user.email}</TableCell>
                           <TableCell>
                             <Badge variant="outline" className={
@@ -466,7 +563,7 @@ const AdminPage = () => {
                             </Badge>
                           </TableCell>
                           {isAdmin && (
-                            <TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
                               <Select
                                 value={user.role || ''}
                                 onValueChange={(value) => handleRoleChange(user.id, value as UserRole)}
@@ -500,13 +597,35 @@ const AdminPage = () => {
                   <CardDescription>
                     Track system activity and security events
                   </CardDescription>
-                  <div className="mt-4">
-                    <Input
-                      placeholder="Filter by user email..."
-                      value={searchQuery}
-                      onChange={handleSearchChange}
-                      className="max-w-sm"
-                    />
+                  <div className="mt-4 relative">
+                    <div className="flex gap-2">
+                      <div className="relative flex-grow">
+                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Filter by user email..."
+                          value={searchQuery}
+                          onChange={handleSearchChange}
+                          className="pl-8"
+                        />
+                      </div>
+                      {searchQuery && (
+                        <Button variant="outline" size="sm" onClick={handleClearSearch}>
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                    
+                    {selectedUser && (
+                      <div className="mt-2 flex items-center">
+                        <Badge className="bg-blue-100 text-blue-800 border-blue-200 flex items-center gap-1">
+                          <UserCheck className="h-3 w-3" />
+                          {selectedUser.email}
+                        </Badge>
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedUser(null)} className="h-6 ml-1 p-1">
+                          ×
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
