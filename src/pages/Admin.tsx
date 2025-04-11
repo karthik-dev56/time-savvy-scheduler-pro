@@ -41,6 +41,16 @@ interface AuditLogEntry {
   created_at: string;
 }
 
+const defaultPredictionMetrics: {
+  noShowAccuracy: number;
+  durationAccuracy: number;
+  rescheduleAcceptance: number;
+} = {
+  noShowAccuracy: 0,
+  durationAccuracy: 0,
+  rescheduleAcceptance: 0
+};
+
 const AdminPage = () => {
   const { user, loading: authLoading } = useAuth();
   const { 
@@ -58,11 +68,7 @@ const AdminPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [predictions, setPredictions] = useState<AIPrediction[]>([]);
-  const [predictionMetrics, setPredictionMetrics] = useState({
-    noShowAccuracy: 0,
-    durationAccuracy: 0,
-    rescheduleAcceptance: 0
-  });
+  const [predictionMetrics, setPredictionMetrics] = useState(defaultPredictionMetrics);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('users');
@@ -346,12 +352,7 @@ const AdminPage = () => {
       }
       
       const predictionsData = await getAIPredictions(10);
-      
-      if (searchQuery || selectedUser) {
-        setPredictions(predictionsData);
-      } else {
-        setPredictions(predictionsData);
-      }
+      setPredictions(predictionsData);
       
     } catch (error) {
       console.error('Error in fetchAIPredictions:', error);
