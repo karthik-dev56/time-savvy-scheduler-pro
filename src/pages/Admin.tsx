@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
@@ -34,7 +35,7 @@ interface UserWithRole {
 
 const AdminPage = () => {
   const { user, loading: authLoading } = useAuth();
-  const { userRole, loading: roleLoading, assignRole } = useRoleManagement();
+  const { userRole, loading: roleLoading, assignRole, allUserRoles } = useRoleManagement();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,12 +71,121 @@ const AdminPage = () => {
     }
   }, [user, userRole, authLoading, roleLoading, isSpecialAdmin, navigate, toast]);
 
+  // Set up real-time subscription for user roles
+  useEffect(() => {
+    if (!user || (!isSpecialAdmin && userRole !== 'admin' && userRole !== 'manager')) return;
+    
+    console.log("Setting up real-time subscription for user roles");
+    
+    // Subscribe to changes in the user_roles table
+    const channel = supabase
+      .channel('admin-user-roles-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'user_roles' }, 
+        (payload) => {
+          console.log('Real-time update received for user_roles:', payload);
+          updateUserRolesFromRealtime();
+        }
+      )
+      .subscribe();
+      
+    // Clean up subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, userRole, isSpecialAdmin]);
+  
+  // Function to update users when real-time changes occur
+  const updateUserRolesFromRealtime = useCallback(async () => {
+    try {
+      console.log("Updating user roles from realtime event");
+      
+      // Get all user roles
+      const { data: userRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+        
+      if (rolesError) {
+        console.error('Error fetching user roles:', rolesError);
+        return;
+      }
+      
+      // Create a simplified user list from roles
+      const usersWithRoles: UserWithRole[] = userRoles?.map((ur: any) => ({
+        id: ur.user_id,
+        email: `User ${ur.user_id.substring(0, 8)}`,
+        role: ur.role as UserRole
+      })) || [];
+      
+      setUsers(usersWithRoles);
+    } catch (error) {
+      console.error('Error in updateUserRolesFromRealtime:', error);
+    }
+  }, []);
+
+  // Set up real-time subscription for audit logs
+  useEffect(() => {
+    if (!user || (!isSpecialAdmin && userRole !== 'admin')) return;
+    if (activeTab !== 'audit') return;
+    
+    console.log("Setting up real-time subscription for audit logs");
+    
+    // Subscribe to changes in the audit_logs table
+    const channel = supabase
+      .channel('admin-audit-logs-changes')
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'audit_logs' }, 
+        (payload) => {
+          console.log('Real-time update received for audit_logs:', payload);
+          setAuditLogs(prevLogs => [payload.new as any, ...prevLogs.slice(0, 49)]);
+        }
+      )
+      .subscribe();
+      
+    // Clean up subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, userRole, isSpecialAdmin, activeTab]);
+
+  // Initial data loading based on active tab - optimized to prevent multiple calls
+  useEffect(() => {
+    if (!user) return; // Don't fetch if no user
+    
+    if (isSpecialAdmin || userRole === 'admin' || userRole === 'manager') {
+      const fetchData = async () => {
+        console.log(`Loading data for tab: ${activeTab}`);
+        setLoading(true);
+        
+        try {
+          if (activeTab === 'users') {
+            await fetchUsers();
+          } else if (activeTab === 'audit' && (isSpecialAdmin || userRole === 'admin')) {
+            await fetchAuditLogs();
+          } else if (activeTab === 'predictions') {
+            await fetchAIPredictions();
+          }
+        } catch (error) {
+          console.error(`Error fetching data for ${activeTab} tab:`, error);
+          toast({
+            title: "Error",
+            description: `Failed to load ${activeTab} data`,
+            variant: "destructive",
+          });
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      fetchData();
+    }
+  }, [userRole, activeTab, isSpecialAdmin, user]);
+
   // Memoized fetch functions to prevent unnecessary re-renders
   const fetchUsers = useCallback(async () => {
     if (!isSpecialAdmin && userRole !== 'admin' && userRole !== 'manager') return;
     
     try {
-      setLoading(true);
       console.log("Fetching users...");
       
       // Get all user roles
@@ -85,7 +195,6 @@ const AdminPage = () => {
         
       if (rolesError) {
         console.error('Error fetching user roles:', rolesError);
-        setLoading(false);
         return;
       }
       
@@ -99,8 +208,6 @@ const AdminPage = () => {
       setUsers(usersWithRoles);
     } catch (error) {
       console.error('Error in fetchUsers:', error);
-    } finally {
-      setLoading(false);
     }
   }, [isSpecialAdmin, userRole]);
 
@@ -108,7 +215,6 @@ const AdminPage = () => {
     if (!isSpecialAdmin && userRole !== 'admin') return;
 
     try {
-      setLoading(true);
       console.log("Fetching audit logs...");
       
       const { data, error } = await supabase
@@ -125,14 +231,11 @@ const AdminPage = () => {
       setAuditLogs(data || []);
     } catch (error) {
       console.error('Error in fetchAuditLogs:', error);
-    } finally {
-      setLoading(false);
     }
   }, [isSpecialAdmin, userRole]);
 
   const fetchAIPredictions = useCallback(async () => {
     try {
-      setLoading(true);
       console.log("Fetching AI predictions...");
       
       // Use our helper function to fetch metrics
@@ -152,30 +255,8 @@ const AdminPage = () => {
       
     } catch (error) {
       console.error('Error in fetchAIPredictions:', error);
-    } finally {
-      setLoading(false);
     }
   }, []);
-
-  // Load data based on active tab - optimized to prevent multiple calls
-  useEffect(() => {
-    if (!user) return; // Don't fetch if no user
-    
-    if (isSpecialAdmin || userRole === 'admin' || userRole === 'manager') {
-      const fetchData = async () => {
-        console.log(`Loading data for tab: ${activeTab}`);
-        if (activeTab === 'users') {
-          await fetchUsers();
-        } else if (activeTab === 'audit' && (isSpecialAdmin || userRole === 'admin')) {
-          await fetchAuditLogs();
-        } else if (activeTab === 'predictions') {
-          await fetchAIPredictions();
-        }
-      };
-      
-      fetchData();
-    }
-  }, [userRole, activeTab, isSpecialAdmin, user, fetchUsers, fetchAuditLogs, fetchAIPredictions]);
 
   // Handle role change
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
@@ -190,7 +271,13 @@ const AdminPage = () => {
     
     const success = await assignRole(userId, newRole);
     if (success) {
-      // Update local state
+      toast({
+        title: "Role Updated",
+        description: `User role changed to ${newRole}`,
+      });
+      
+      // The real-time subscription will update the users list
+      // This fallback updates the local state if real-time fails
       setUsers(prevUsers => 
         prevUsers.map(u => 
           u.id === userId ? { ...u, role: newRole } : u

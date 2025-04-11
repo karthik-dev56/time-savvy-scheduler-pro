@@ -61,6 +61,44 @@ export function useRoleManagement() {
     }
   };
 
+  // Set up real-time listener for current user's role changes
+  useEffect(() => {
+    if (!user) return;
+    
+    console.log("Setting up real-time role updates for current user");
+    
+    // Subscribe to changes in user's role
+    const channel = supabase
+      .channel('user-role-changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'user_roles',
+          filter: `user_id=eq.${user.id}`
+        }, 
+        (payload) => {
+          console.log('User role changed:', payload);
+          if (payload.eventType === 'DELETE') {
+            setUserRole('user'); // Default to user if role is deleted
+          } else if (payload.new) {
+            setUserRole((payload.new as any).role);
+          }
+          
+          // Refresh all roles if admin
+          if (userRole === 'admin' || user.id === 'admin-special') {
+            fetchAllUserRoles();
+          }
+        }
+      )
+      .subscribe();
+    
+    // Clean up subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   // Fetch all users with their roles (for admin panel)
   const fetchAllUserRoles = async () => {
     // Check if the special admin user
@@ -152,8 +190,7 @@ export function useRoleManagement() {
         description: `Successfully assigned role: ${role}`,
       });
 
-      // Refresh all user roles
-      fetchAllUserRoles();
+      // Refresh all user roles will happen via real-time updates
       return true;
     } catch (error: any) {
       console.error('Unexpected error assigning role:', error);

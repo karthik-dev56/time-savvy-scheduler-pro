@@ -16,9 +16,31 @@ export const supabase = createClient<Database>(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 10
+      }
     }
   }
 );
+
+// Enable realtime for relevant tables
+const setupRealtimeTables = async () => {
+  try {
+    // Execute this SQL through the client to enable realtime
+    await supabase.rpc('supabase_realtime', {
+      table_ids: ['user_roles', 'audit_logs', 'ai_prediction_metrics', 'ai_predictions']
+    }).then(() => {
+      console.log('Realtime enabled for admin tables');
+    });
+  } catch (err) {
+    console.error('Could not enable realtime for tables:', err);
+  }
+};
+
+// Call this once when app initializes
+setupRealtimeTables();
 
 // Types for our AI prediction related tables
 export interface AIPredictionMetrics {
