@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, debugAppointments } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { checkAndSendReminders } from '@/utils/notificationUtils';
@@ -25,15 +25,25 @@ export function useAppointments() {
     
     try {
       setLoading(true);
+      console.log("Fetching appointments for user:", user.id);
+      
       const { data, error } = await supabase
         .from('appointments')
         .select('*')
         .order('start_time', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error in initial appointment fetch:", error);
+        throw error;
+      }
+      
+      console.log("Fetched appointments:", data?.length || 0, "appointments");
+      
+      // Debug appointments to console for troubleshooting
+      await debugAppointments();
       
       // Fetch participants for multi-person meetings
-      const multiPersonAppointments = data.filter(apt => apt.is_multi_person);
+      const multiPersonAppointments = data?.filter(apt => apt.is_multi_person) || [];
       
       if (multiPersonAppointments.length > 0) {
         const appointmentIds = multiPersonAppointments.map(apt => apt.id);
@@ -46,10 +56,12 @@ export function useAppointments() {
         if (participantsError) {
           console.error("Error fetching participants:", participantsError);
         } else {
+          console.log("Fetched participants:", participantsData?.length || 0, "participants");
+          
           // Group participants by appointment_id
           const participantsByAppointment: Record<string, ParticipantInfo[]> = {};
           
-          participantsData.forEach(participant => {
+          participantsData?.forEach(participant => {
             if (!participantsByAppointment[participant.appointment_id]) {
               participantsByAppointment[participant.appointment_id] = [];
             }
@@ -82,7 +94,7 @@ export function useAppointments() {
       console.error('Error fetching appointments:', error);
       toast({
         title: "Error",
-        description: "Could not load appointments",
+        description: "Could not load appointments. Please try refreshing the page.",
         variant: "destructive",
       });
     } finally {
@@ -97,6 +109,7 @@ export function useAppointments() {
   useEffect(() => {
     if (!user) return;
 
+    console.log("Setting up realtime subscription for appointments");
     const channel = supabase
       .channel('appointments-changes')
       .on('postgres_changes', 
@@ -105,13 +118,15 @@ export function useAppointments() {
           schema: 'public', 
           table: 'appointments' 
         }, 
-        () => {
+        (payload) => {
+          console.log("Received realtime update for appointments:", payload);
           fetchAppointments();
         }
       )
       .subscribe();
     
     return () => {
+      console.log("Removing appointments channel subscription");
       supabase.removeChannel(channel);
     };
   }, [user]);
@@ -119,6 +134,7 @@ export function useAppointments() {
   useEffect(() => {
     if (!user) return;
 
+    console.log("Setting up realtime subscription for participants");
     const channel = supabase
       .channel('participants-changes')
       .on('postgres_changes', 
@@ -127,13 +143,15 @@ export function useAppointments() {
           schema: 'public', 
           table: 'participants' 
         }, 
-        () => {
+        (payload) => {
+          console.log("Received realtime update for participants:", payload);
           fetchAppointments();
         }
       )
       .subscribe();
     
     return () => {
+      console.log("Removing participants channel subscription");
       supabase.removeChannel(channel);
     };
   }, [user]);

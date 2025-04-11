@@ -28,7 +28,7 @@ export const supabase = createClient<Database>(
 // Enable realtime for relevant tables
 const setupRealtimeTables = async () => {
   try {
-    console.log("Setting up realtime subscription for admin tables...");
+    console.log("Setting up realtime subscription for admin tables and appointments...");
     
     // Use a single channel for all tables to improve performance and connection handling
     const channel = supabase.channel('admin-tables-changes', {
@@ -65,11 +65,25 @@ const setupRealtimeTables = async () => {
       }, (payload) => {
         console.log('Received realtime update for ai_predictions:', payload);
       })
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'appointments' 
+      }, (payload) => {
+        console.log('Received realtime update for appointments:', payload);
+      })
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'participants' 
+      }, (payload) => {
+        console.log('Received realtime update for participants:', payload);
+      })
       .subscribe((status) => {
         console.log('Realtime subscription status:', status);
         // Notify that the channel is ready if successfully subscribed
         if (status === 'SUBSCRIBED') {
-          console.log('🟢 Realtime enabled for admin tables');
+          console.log('🟢 Realtime enabled for admin tables and appointments');
         } else if (status === 'CHANNEL_ERROR') {
           console.error('🔴 Error subscribing to realtime events');
         }
@@ -208,4 +222,23 @@ const getDemoPredictions = (): AIPrediction[] => {
       updated_at: new Date().toISOString()
     }
   ];
+};
+
+// Helper function to debug appointments
+export const debugAppointments = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*');
+    
+    if (error) {
+      console.error('Error debugging appointments:', error);
+      return;
+    }
+    
+    console.log('Current appointments in database:', data);
+    return data;
+  } catch (err) {
+    console.error('Unexpected error debugging appointments:', err);
+  }
 };
