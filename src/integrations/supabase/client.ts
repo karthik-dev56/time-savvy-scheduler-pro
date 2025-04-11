@@ -28,14 +28,38 @@ export const supabase = createClient<Database>(
 // Enable realtime for relevant tables
 const setupRealtimeTables = async () => {
   try {
-    // Execute this SQL through the client to enable realtime
-    await supabase.rpc('supabase_realtime', {
-      table_ids: ['user_roles', 'audit_logs', 'ai_prediction_metrics', 'ai_predictions']
-    }).then(() => {
-      console.log('Realtime enabled for admin tables');
-    });
+    // Instead of using RPC, we'll use direct channel configuration
+    // to enable realtime for these tables
+    const channel = supabase.channel('admin-tables-changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'user_roles' 
+      }, () => {})
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'audit_logs' 
+      }, () => {})
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'ai_prediction_metrics' 
+      }, () => {})
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'ai_predictions' 
+      }, () => {})
+      .subscribe();
+      
+    console.log('Realtime enabled for admin tables');
+    
+    // Return the channel to allow for cleanup if needed
+    return channel;
   } catch (err) {
     console.error('Could not enable realtime for tables:', err);
+    return null;
   }
 };
 
