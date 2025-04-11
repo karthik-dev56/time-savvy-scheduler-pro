@@ -14,9 +14,16 @@ export interface UserRoleData {
   updated_at: string;
 }
 
+export interface UserWithEmailAndRole {
+  id: string;
+  email: string;
+  role: UserRole;
+}
+
 export function useRoleManagement() {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [allUserRoles, setAllUserRoles] = useState<UserRoleData[]>([]);
+  const [usersWithEmails, setUsersWithEmails] = useState<UserWithEmailAndRole[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -88,6 +95,7 @@ export function useRoleManagement() {
           // Refresh all roles if admin
           if (userRole === 'admin' || user.id === 'admin-special') {
             fetchAllUserRoles();
+            fetchUsersWithEmailsAndRoles();
           }
         }
       )
@@ -98,6 +106,65 @@ export function useRoleManagement() {
       supabase.removeChannel(channel);
     };
   }, [user]);
+
+  // Fetch user emails along with their roles (for admin panel)
+  // In a real app, this would query auth.users data through a secure RPC or via server
+  const fetchUsersWithEmailsAndRoles = async () => {
+    // Check if the special admin user
+    if (user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin')) {
+      // For the special admin user, we don't need to check the database role
+      // Just continue with the function
+    } else if (!user || userRole !== 'admin') {
+      setUsersWithEmails([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // In a real application, we would fetch user data from auth.users via a secure RPC
+      // For this demo, we'll simulate it with user_roles data
+      const { data: roleData, error: roleError } = await supabase
+        .from('user_roles')
+        .select('*');
+
+      if (roleError) {
+        console.error('Error fetching user roles with emails:', roleError);
+        toast({
+          title: "Error",
+          description: "Could not load user data",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Map roles to include simulated email addresses
+      // In production, this would come from auth.users via a secure method
+      const usersData = roleData.map((role: any) => {
+        // Create a more realistic email pattern for demo purposes
+        const userId = role.user_id;
+        const email = `user-${userId.substring(0, 8)}@example.com`;
+        
+        return {
+          id: userId,
+          email: email,
+          role: role.role as UserRole
+        };
+      });
+      
+      console.log("Users with emails and roles:", usersData);
+      setUsersWithEmails(usersData);
+    } catch (error: any) {
+      console.error('Error fetching users with emails:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load user data",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch all users with their roles (for admin panel)
   const fetchAllUserRoles = async () => {
@@ -190,7 +257,11 @@ export function useRoleManagement() {
         description: `Successfully assigned role: ${role}`,
       });
 
-      // Refresh all user roles will happen via real-time updates
+      // Also update local state for usersWithEmails
+      setUsersWithEmails(prev => 
+        prev.map(u => u.id === userId ? { ...u, role } : u)
+      );
+
       return true;
     } catch (error: any) {
       console.error('Unexpected error assigning role:', error);
@@ -219,6 +290,14 @@ export function useRoleManagement() {
     return userRole === 'admin' || userRole === 'manager';
   };
 
+  // Search users by email
+  const searchUsersByEmail = (query: string): UserWithEmailAndRole[] => {
+    if (!query) return usersWithEmails;
+    return usersWithEmails.filter(u => 
+      u.email.toLowerCase().includes(query.toLowerCase())
+    );
+  };
+
   useEffect(() => {
     fetchUserRole();
   }, [user]);
@@ -226,6 +305,7 @@ export function useRoleManagement() {
   useEffect(() => {
     if (userRole === 'admin' || user?.id === 'admin-special') {
       fetchAllUserRoles();
+      fetchUsersWithEmailsAndRoles();
     }
   }, [userRole, user]);
 
@@ -233,9 +313,11 @@ export function useRoleManagement() {
     userRole: user?.id === 'admin-special' ? 'admin' : userRole,
     loading,
     allUserRoles,
+    usersWithEmails,
     hasRole,
     isAdminOrManager,
     assignRole,
     fetchAllUserRoles,
+    searchUsersByEmail,
   };
 }

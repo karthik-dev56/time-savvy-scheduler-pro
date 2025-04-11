@@ -28,6 +28,8 @@ export const supabase = createClient<Database>(
 // Enable realtime for relevant tables
 const setupRealtimeTables = async () => {
   try {
+    console.log("Setting up realtime subscription for admin tables...");
+    
     // Instead of using RPC, we'll use direct channel configuration
     // to enable realtime for these tables
     const channel = supabase.channel('admin-tables-changes')
@@ -35,23 +37,33 @@ const setupRealtimeTables = async () => {
         event: '*', 
         schema: 'public', 
         table: 'user_roles' 
-      }, () => {})
+      }, (payload) => {
+        console.log('Received realtime update for user_roles:', payload);
+      })
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
         table: 'audit_logs' 
-      }, () => {})
+      }, (payload) => {
+        console.log('Received realtime update for audit_logs:', payload);
+      })
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
         table: 'ai_prediction_metrics' 
-      }, () => {})
+      }, (payload) => {
+        console.log('Received realtime update for ai_prediction_metrics:', payload);
+      })
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
         table: 'ai_predictions' 
-      }, () => {})
-      .subscribe();
+      }, (payload) => {
+        console.log('Received realtime update for ai_predictions:', payload);
+      })
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
       
     console.log('Realtime enabled for admin tables');
     
@@ -89,6 +101,7 @@ export interface AIPrediction {
 // Helper function for AI prediction metrics table - optimized to avoid multiple queries
 export const getAIPredictionMetrics = async (): Promise<AIPredictionMetrics | null> => {
   try {
+    console.log("Fetching AI prediction metrics...");
     const { data, error } = await supabase
       .from('ai_prediction_metrics')
       .select('*')
@@ -96,9 +109,18 @@ export const getAIPredictionMetrics = async (): Promise<AIPredictionMetrics | nu
     
     if (error) {
       console.error('Error fetching AI metrics:', error);
-      return null;
+      console.log("Using demo data for AI prediction metrics");
+      return {
+        id: 'demo',
+        no_show_accuracy: 87,
+        duration_accuracy: 92,
+        reschedule_acceptance: 79,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
     }
     
+    console.log("Successfully fetched AI prediction metrics:", data);
     return data as unknown as AIPredictionMetrics;
   } catch (err) {
     console.error('Unexpected error fetching AI metrics:', err);
@@ -117,6 +139,7 @@ export const getAIPredictionMetrics = async (): Promise<AIPredictionMetrics | nu
 // Helper function for AI predictions table - optimized with error handling
 export const getAIPredictions = async (limit = 10): Promise<AIPrediction[]> => {
   try {
+    console.log("Fetching AI predictions...");
     const { data, error } = await supabase
       .from('ai_predictions')
       .select('*')
@@ -125,9 +148,11 @@ export const getAIPredictions = async (limit = 10): Promise<AIPrediction[]> => {
     
     if (error) {
       console.error('Error fetching AI predictions:', error);
+      console.log("Using demo data for AI predictions");
       return getDemoPredictions();
     }
     
+    console.log("Successfully fetched AI predictions:", data);
     return (data?.length ? data : getDemoPredictions()) as AIPrediction[];
   } catch (err) {
     console.error('Unexpected error fetching AI predictions:', err);
