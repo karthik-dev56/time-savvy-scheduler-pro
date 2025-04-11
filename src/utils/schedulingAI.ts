@@ -12,9 +12,6 @@ interface UserAttendanceRecord {
 // No-Show Prediction utility
 export const predictNoShow = async (userId: string): Promise<number> => {
   try {
-    // For now, we'll use a simple algorithm based on historical attendance
-    // In a real-world app, this could be a more sophisticated machine learning model
-    
     // Get user's past appointments
     const { data: appointments, error } = await supabase
       .from('appointments')
@@ -32,13 +29,13 @@ export const predictNoShow = async (userId: string): Promise<number> => {
     
     // Store this prediction in audit logs for future model training
     await supabase
-      .from('audit_logs' as any)
+      .from('audit_logs')
       .insert({
         action: 'no_show_prediction',
         table_name: 'appointments',
         user_id: userId,
         details: { prediction: randomFactor }
-      } as any);
+      });
       
     return randomFactor;
   } catch (error) {

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import NewAppointment from './NewAppointment';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useAuth } from '@/hooks/useAuth';
@@ -33,13 +33,17 @@ const SmartNewAppointment = () => {
   const [estimatedDuration, setEstimatedDuration] = useState<number | null>(null);
   const [noShowRisk, setNoShowRisk] = useState<number | null>(null);
   const [alternativeSlots, setAlternativeSlots] = useState<{start: Date, end: Date}[]>([]);
+  const [startTime, setStartTime] = useState<string>('');
+  const [endTime, setEndTime] = useState<string>('');
   
   // Handle title/description changes and get AI recommendations
   const handleTitleChange = async (newTitle: string) => {
     setTitle(newTitle);
-    if (newTitle.length > 5 && user) {
+    if (newTitle.length > 3 && user) {
       try {
+        console.log("Estimating duration for title:", newTitle);
         const duration = await estimateMeetingDuration(user.id, newTitle, description);
+        console.log("Estimated duration:", duration);
         setEstimatedDuration(duration);
       } catch (error) {
         console.error("Error estimating duration:", error);
@@ -49,9 +53,11 @@ const SmartNewAppointment = () => {
   
   const handleDescriptionChange = async (newDescription: string) => {
     setDescription(newDescription);
-    if (title.length > 5 && user) {
+    if (title.length > 3 && user) {
       try {
+        console.log("Estimating duration for description:", newDescription);
         const duration = await estimateMeetingDuration(user.id, title, newDescription);
+        console.log("Estimated duration:", duration);
         setEstimatedDuration(duration);
       } catch (error) {
         console.error("Error estimating duration:", error);
@@ -76,15 +82,19 @@ const SmartNewAppointment = () => {
     }
   };
   
-  const findAlternativeSlotsForAppointment = async (startTime: string, endTime: string) => {
-    if (!user) return;
+  const handleTimeChange = async (newStartTime: string, newEndTime: string) => {
+    console.log("Time change detected:", newStartTime, newEndTime);
+    setStartTime(newStartTime);
+    setEndTime(newEndTime);
+    
+    if (!user || !newStartTime || !newEndTime) return;
     
     try {
       const fakeAppointment = {
         id: 'temp',
         user_id: user.id,
-        start_time: startTime,
-        end_time: endTime,
+        start_time: newStartTime,
+        end_time: newEndTime,
         title: title || 'New Appointment',
         priority: 'normal',
         is_multi_person: isMultiPerson,
@@ -93,7 +103,9 @@ const SmartNewAppointment = () => {
         description: description || null
       };
       
+      console.log("Finding alternative slots for:", fakeAppointment);
       const slots = await findAlternativeSlots(fakeAppointment);
+      console.log("Found alternative slots:", slots);
       setAlternativeSlots(slots);
     } catch (error) {
       console.error("Error finding alternative slots:", error);
@@ -202,7 +214,7 @@ const SmartNewAppointment = () => {
         onTitleChange={handleTitleChange}
         onDescriptionChange={handleDescriptionChange}
         onParticipantsChange={handleParticipantsChange}
-        onTimeChange={findAlternativeSlotsForAppointment}
+        onTimeChange={handleTimeChange}
       />
     </div>
   );
