@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
@@ -347,9 +348,9 @@ const AdminPage = () => {
       
       if (metricsData) {
         setPredictionMetrics({
-          noShowAccuracy: metricsData.no_show_accuracy,
-          durationAccuracy: metricsData.duration_accuracy,
-          rescheduleAcceptance: metricsData.reschedule_acceptance
+          noShowAccuracy: metricsData.no_show_accuracy || 0,
+          durationAccuracy: metricsData.duration_accuracy || 0,
+          rescheduleAcceptance: metricsData.reschedule_acceptance || 0
         });
       } else {
         setPredictionMetrics(defaultPredictionMetrics);
