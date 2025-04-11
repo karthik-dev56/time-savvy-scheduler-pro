@@ -357,7 +357,7 @@ const AdminPage = () => {
     } catch (error) {
       console.error('Error in fetchAIPredictions:', error);
     }
-  }, [searchQuery, selectedUser]);
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'users') {

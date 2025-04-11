@@ -129,7 +129,7 @@ export const getAIPredictionMetrics = async (): Promise<AIPredictionMetrics | nu
     }
     
     console.log("Successfully fetched AI prediction metrics:", data);
-    return data as unknown as AIPredictionMetrics;
+    return data as AIPredictionMetrics;
   } catch (err) {
     console.error('Unexpected error fetching AI metrics:', err);
     // Return demo data as fallback
