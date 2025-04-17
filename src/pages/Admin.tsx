@@ -3,8 +3,17 @@ import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useAuth } from '@/hooks/useAuth';
 import { useRoleManagement } from '@/hooks/useRoleManagement';
+import { useAppointments } from '@/hooks/useAppointments';
 import { 
   supabase, 
   getAIPredictionMetrics, 
@@ -34,7 +43,8 @@ import {
 
 const AdminPage = () => {
   const { user } = useAuth();
-  const { userRole, fetchUsersWithEmailsAndRoles } = useRoleManagement();
+  const { userRole, fetchUsersWithEmailsAndRoles, usersWithEmails } = useRoleManagement();
+  const { appointments, fetchAppointments } = useAppointments();
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -58,20 +68,25 @@ const AdminPage = () => {
         
         await ensureAuditLogsExist();
         
+        // Make sure we fetch current user roles
         await fetchUsersWithEmailsAndRoles();
         
         const count = await getUserCount();
-        setUserCount(count);
+        setUserCount(count > 0 ? count : usersWithEmails.length);
         console.log("Fetched user count:", count);
         
         const users = await getRegisteredUsers();
         setRegisteredUsers(users);
         console.log("Fetched registered users:", users.length);
         
+        // Make sure we fetch all appointments
+        await fetchAppointments();
+        
+        // Get appointment data
         const detailedAppts = await getDetailedAppointments();
         setDetailedAppointments(detailedAppts);
-        setAppointmentCount(detailedAppts.length);
-        console.log("Fetched detailed appointments:", detailedAppts.length);
+        setAppointmentCount(detailedAppts.length || appointments.length);
+        console.log("Fetched detailed appointments:", detailedAppts.length || appointments.length);
         
         try {
           const metrics = await getAIPredictionMetrics();
@@ -135,8 +150,8 @@ const AdminPage = () => {
       console.log("Authorized admin access, fetching data");
       fetchAdminData();
     }
-  }, [user, toast, fetchUsersWithEmailsAndRoles]);
-  
+  }, [user, toast, fetchUsersWithEmailsAndRoles, fetchAppointments]);
+
   const refreshAdminData = async () => {
     toast({
       title: "Refreshing data",
@@ -266,7 +281,7 @@ const AdminPage = () => {
                   <CardTitle>Total Users</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{userCount}</p>
+                  <p className="text-3xl font-bold">{userCount || usersWithEmails.length}</p>
                   <p className="text-xs text-muted-foreground">Registered users in system</p>
                 </CardContent>
               </Card>
@@ -276,7 +291,7 @@ const AdminPage = () => {
                   <CardTitle>Active Appointments</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{appointmentCount}</p>
+                  <p className="text-3xl font-bold">{appointmentCount || appointments.length}</p>
                   <p className="text-xs text-muted-foreground">Total appointments in system</p>
                 </CardContent>
               </Card>
@@ -302,30 +317,32 @@ const AdminPage = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="h-64 overflow-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="text-left text-xs font-medium text-muted-foreground">
-                          <th className="pb-2">User ID</th>
-                          <th className="pb-2">Name</th>
-                          <th className="pb-2">Registered</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>User ID</TableHead>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Registered</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {registeredUsers.length > 0 ? (
                           registeredUsers.slice(0, 5).map((user, index) => (
-                            <tr key={user.id || index} className="text-sm border-b border-border last:border-0">
-                              <td className="py-2">{(user.id || "").substring(0, 8)}...</td>
-                              <td className="py-2">{user.first_name || ""} {user.last_name || ""}</td>
-                              <td className="py-2">{formatDate(user.created_at)}</td>
-                            </tr>
+                            <TableRow key={user.id || index}>
+                              <TableCell className="font-medium">{(user.id || "").substring(0, 8)}...</TableCell>
+                              <TableCell>{user.first_name || ""} {user.last_name || ""}</TableCell>
+                              <TableCell>{user.user_roles?.role || "user"}</TableCell>
+                              <TableCell>{formatDate(user.created_at)}</TableCell>
+                            </TableRow>
                           ))
                         ) : (
-                          <tr className="text-sm">
-                            <td colSpan={3} className="py-2 text-center">No registered users found</td>
-                          </tr>
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center">No registered users found</TableCell>
+                          </TableRow>
                         )}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 </CardContent>
               </Card>
@@ -336,34 +353,34 @@ const AdminPage = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="h-64 overflow-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="text-left text-xs font-medium text-muted-foreground">
-                          <th className="pb-2">Title</th>
-                          <th className="pb-2">Date/Time</th>
-                          <th className="pb-2">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {detailedAppointments.length > 0 ? (
-                          detailedAppointments.slice(0, 5).map((appointment, index) => (
-                            <tr key={appointment.id || index} className="text-sm border-b border-border last:border-0">
-                              <td className="py-2">{appointment.title}</td>
-                              <td className="py-2">{formatDate(appointment.start_time)}</td>
-                              <td className="py-2">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Date/Time</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {appointments.length > 0 ? (
+                          appointments.slice(0, 5).map((appointment, index) => (
+                            <TableRow key={appointment.id || index}>
+                              <TableCell className="font-medium">{appointment.title}</TableCell>
+                              <TableCell>{formatDate(appointment.start_time)}</TableCell>
+                              <TableCell>
                                 <span className="px-2 py-1 rounded-md text-xs bg-green-100 text-green-800">
                                   Active
                                 </span>
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           ))
                         ) : (
-                          <tr className="text-sm">
-                            <td colSpan={3} className="py-2 text-center">No appointments found</td>
-                          </tr>
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center">No appointments found</TableCell>
+                          </TableRow>
                         )}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 </CardContent>
               </Card>
@@ -404,34 +421,32 @@ const AdminPage = () => {
               </CardHeader>
               <CardContent>
                 <div className="h-[500px] overflow-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="text-left text-xs font-medium text-muted-foreground">
-                        <th className="pb-2">User ID</th>
-                        <th className="pb-2">Name</th>
-                        <th className="pb-2">Role</th>
-                        <th className="pb-2">Registration Date</th>
-                        <th className="pb-2">Last Updated</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {registeredUsers.length > 0 ? (
-                        registeredUsers.map((user, index) => (
-                          <tr key={user.id || index} className="text-sm border-b border-border last:border-0">
-                            <td className="py-2">{(user.id || "").substring(0, 8)}...</td>
-                            <td className="py-2">{user.first_name || ""} {user.last_name || ""}</td>
-                            <td className="py-2">{user.user_roles?.role || "user"}</td>
-                            <td className="py-2">{formatDate(user.created_at)}</td>
-                            <td className="py-2">{formatDate(user.updated_at)}</td>
-                          </tr>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User ID</TableHead>
+                        <TableHead>Name/Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Registration Date</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {usersWithEmails.length > 0 ? (
+                        usersWithEmails.map((user, index) => (
+                          <TableRow key={user.id || index}>
+                            <TableCell className="font-medium">{(user.id || "").substring(0, 8)}...</TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>{user.role}</TableCell>
+                            <TableCell>{formatDate(registeredUsers.find(u => u.id === user.id)?.created_at || new Date().toISOString())}</TableCell>
+                          </TableRow>
                         ))
                       ) : (
-                        <tr className="text-sm">
-                          <td colSpan={5} className="py-2 text-center">No registered users found</td>
-                        </tr>
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center">No registered users found</TableCell>
+                        </TableRow>
                       )}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
@@ -444,26 +459,26 @@ const AdminPage = () => {
               </CardHeader>
               <CardContent>
                 <div className="h-[500px] overflow-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="text-left text-xs font-medium text-muted-foreground">
-                        <th className="pb-2">Title</th>
-                        <th className="pb-2">User ID</th>
-                        <th className="pb-2">Start Time</th>
-                        <th className="pb-2">End Time</th>
-                        <th className="pb-2">Priority</th>
-                        <th className="pb-2">Created</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detailedAppointments.length > 0 ? (
-                        detailedAppointments.map((appointment, index) => (
-                          <tr key={appointment.id || index} className="text-sm border-b border-border last:border-0">
-                            <td className="py-2">{appointment.title}</td>
-                            <td className="py-2">{(appointment.user_id || "").substring(0, 8)}...</td>
-                            <td className="py-2">{formatDate(appointment.start_time)}</td>
-                            <td className="py-2">{formatDate(appointment.end_time)}</td>
-                            <td className="py-2">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead>User ID</TableHead>
+                        <TableHead>Start Time</TableHead>
+                        <TableHead>End Time</TableHead>
+                        <TableHead>Priority</TableHead>
+                        <TableHead>Created</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {appointments.length > 0 ? (
+                        appointments.map((appointment, index) => (
+                          <TableRow key={appointment.id || index}>
+                            <TableCell className="font-medium">{appointment.title}</TableCell>
+                            <TableCell>{(appointment.user_id || "").substring(0, 8)}...</TableCell>
+                            <TableCell>{formatDate(appointment.start_time)}</TableCell>
+                            <TableCell>{formatDate(appointment.end_time)}</TableCell>
+                            <TableCell>
                               <span className={`px-2 py-1 rounded-md text-xs ${
                                 appointment.priority === 'high' ? 'bg-red-100 text-red-800' :
                                 appointment.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
@@ -471,17 +486,17 @@ const AdminPage = () => {
                               }`}>
                                 {appointment.priority}
                               </span>
-                            </td>
-                            <td className="py-2">{formatDate(appointment.created_at)}</td>
-                          </tr>
+                            </TableCell>
+                            <TableCell>{formatDate(appointment.created_at)}</TableCell>
+                          </TableRow>
                         ))
                       ) : (
-                        <tr className="text-sm">
-                          <td colSpan={6} className="py-2 text-center">No appointments found</td>
-                        </tr>
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center">No appointments found</TableCell>
+                        </TableRow>
                       )}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
