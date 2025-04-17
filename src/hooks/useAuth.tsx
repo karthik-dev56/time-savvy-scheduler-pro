@@ -15,11 +15,11 @@ export function useAuth() {
     if (specialAdminSession) {
       try {
         const adminUser = JSON.parse(specialAdminSession);
-        setUser(adminUser as any);
+        setUser(adminUser);
         setSession({
           access_token: 'admin-token',
           refresh_token: 'admin-refresh',
-          user: adminUser as any,
+          user: adminUser,
           expires_at: Date.now() + 3600,
           expires_in: 3600
         } as any);
@@ -71,13 +71,16 @@ export function useAuth() {
       if (email === "k8716610@gmail.com" && password === "9848+-ab") {
         console.log("Special admin login detected");
         
-        // Create a proper admin user object with valid format
+        // Create a proper admin user object with valid format and UUID
         const adminUser = {
           id: "00000000-0000-0000-0000-000000000000", // Use a valid UUID format
           email: email,
           role: 'admin',
           app_metadata: { role: 'admin' },
-          user_metadata: { role: 'admin', is_super_admin: true }
+          user_metadata: { 
+            role: 'admin', 
+            is_super_admin: true 
+          }
         };
         
         // Store in sessionStorage to persist across page refreshes

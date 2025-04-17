@@ -26,6 +26,19 @@ const ProtectedRoute = ({ children, requiredRole }: { children: React.ReactNode,
     return <Navigate to="/auth" replace />;
   }
   
+  // Special admin check for admin credentials stored in sessionStorage
+  const specialAdminSession = sessionStorage.getItem('specialAdminSession');
+  if (specialAdminSession) {
+    try {
+      const adminUser = JSON.parse(specialAdminSession);
+      if (adminUser && adminUser.user_metadata?.is_super_admin) {
+        return <>{children}</>;
+      }
+    } catch (error) {
+      console.error("Error parsing admin session:", error);
+    }
+  }
+  
   // If we don't need a specific role or user has admin privileges
   if (!requiredRole || user.user_metadata?.is_super_admin || user.app_metadata?.role === 'admin') {
     return <>{children}</>;

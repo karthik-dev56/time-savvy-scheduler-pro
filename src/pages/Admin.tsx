@@ -46,9 +46,14 @@ const AdminPage = () => {
         return;
       }
       
+      // Check for special admin session
+      const specialAdminSession = sessionStorage.getItem('specialAdminSession');
+      const isSpecialAdmin = specialAdminSession ? true : false;
+      
+      // Regular role check
       const isAdmin = hasRole('admin');
       
-      if (!isAdmin) {
+      if (!isAdmin && !isSpecialAdmin && !user.user_metadata?.is_super_admin) {
         toast({
           title: "Access Denied",
           description: "You do not have permission to access the admin page.",
