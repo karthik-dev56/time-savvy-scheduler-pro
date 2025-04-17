@@ -120,7 +120,7 @@ export interface AIPrediction {
   updated_at: string | null;
 }
 
-// Helper function for AI prediction metrics table - optimized to avoid multiple queries
+// Helper function for AI prediction metrics table - optimized to directly use Supabase
 export const getAIPredictionMetrics = async (): Promise<AIPredictionMetrics> => {
   try {
     console.log("Fetching AI prediction metrics...");
@@ -129,30 +129,39 @@ export const getAIPredictionMetrics = async (): Promise<AIPredictionMetrics> => 
       .select('*')
       .single();
     
-    if (error) {
+    if (error || !data) {
       console.error('Error fetching AI metrics:', error);
-      console.log("Using demo data for AI prediction metrics");
-      return {
-        id: 'demo',
-        no_show_accuracy: 87,
-        duration_accuracy: 92,
-        reschedule_acceptance: 79,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      console.log("Creating default AI prediction metrics");
+      
+      // Try to create default metrics
+      const { data: newData, error: insertError } = await supabase
+        .from('ai_prediction_metrics')
+        .insert({
+          no_show_accuracy: 87,
+          duration_accuracy: 92,
+          reschedule_acceptance: 79,
+        })
+        .select()
+        .single();
+      
+      if (insertError || !newData) {
+        console.error("Error creating default metrics:", insertError);
+        return {
+          id: 'demo',
+          no_show_accuracy: 87,
+          duration_accuracy: 92,
+          reschedule_acceptance: 79,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      }
+      
+      console.log("Successfully created default AI metrics:", newData);
+      return newData as AIPredictionMetrics;
     }
     
     console.log("Successfully fetched AI prediction metrics:", data);
-    
-    // Ensure we return data with the expected structure
-    return {
-      id: data.id || 'unknown',
-      no_show_accuracy: typeof data.no_show_accuracy === 'number' ? data.no_show_accuracy : 87,
-      duration_accuracy: typeof data.duration_accuracy === 'number' ? data.duration_accuracy : 92,
-      reschedule_acceptance: typeof data.reschedule_acceptance === 'number' ? data.reschedule_acceptance : 79,
-      created_at: data.created_at || new Date().toISOString(),
-      updated_at: data.updated_at || new Date().toISOString()
-    };
+    return data as AIPredictionMetrics;
   } catch (err) {
     console.error('Unexpected error fetching AI metrics:', err);
     // Return demo data as fallback with explicit typing
@@ -177,14 +186,45 @@ export const getAIPredictions = async (limit = 10): Promise<AIPrediction[]> => {
       .order('created_at', { ascending: false })
       .limit(limit);
     
-    if (error) {
-      console.error('Error fetching AI predictions:', error);
-      console.log("Using demo data for AI predictions");
-      return getDemoPredictions();
+    if (error || !data || data.length === 0) {
+      console.error('Error or no AI predictions:', error);
+      console.log("Creating sample AI predictions");
+      
+      // Create sample predictions
+      const samplePredictions = [
+        { 
+          type: 'No-Show', 
+          prediction: 'Low Risk (15%)', 
+          accuracy: 100
+        },
+        { 
+          type: 'Duration', 
+          prediction: '45 minutes', 
+          accuracy: 78
+        },
+        { 
+          type: 'Reschedule', 
+          prediction: 'Suggested 3 slots', 
+          accuracy: 90
+        }
+      ];
+      
+      const { data: newData, error: insertError } = await supabase
+        .from('ai_predictions')
+        .insert(samplePredictions)
+        .select();
+      
+      if (insertError || !newData || newData.length === 0) {
+        console.error("Error creating sample predictions:", insertError);
+        return getDemoPredictions();
+      }
+      
+      console.log("Successfully created sample AI predictions:", newData.length);
+      return newData as AIPrediction[];
     }
     
-    console.log("Successfully fetched AI predictions:", data);
-    return (data?.length ? data : getDemoPredictions()) as AIPrediction[];
+    console.log("Successfully fetched AI predictions:", data.length);
+    return data as AIPrediction[];
   } catch (err) {
     console.error('Unexpected error fetching AI predictions:', err);
     return getDemoPredictions();

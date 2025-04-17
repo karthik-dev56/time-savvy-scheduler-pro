@@ -20,17 +20,15 @@ export interface UserWithEmailAndRole {
   role: UserRole;
 }
 
-// Enhanced mock data for the admin interface
+// Enhanced mock data for the admin interface - only used as fallback if database fails
 const DEMO_USERS: UserWithEmailAndRole[] = [
   { id: '123e4567-e89b-12d3-a456-426614174000', email: 'admin@example.com', role: 'admin' },
   { id: '123e4567-e89b-12d3-a456-426614174001', email: 'manager@example.com', role: 'manager' },
   { id: '123e4567-e89b-12d3-a456-426614174002', email: 'user1@example.com', role: 'user' },
-  { id: '123e4567-e89b-12d3-a456-426614174003', email: 'user2@example.com', role: 'user' },
-  { id: '123e4567-e89b-12d3-a456-426614174004', email: 'prokarthik1449@gmail.com', role: 'user' },
-  { id: '123e4567-e89b-12d3-a456-426614174005', email: 'user.test@example.com', role: 'user' },
+  { id: '123e4567-e89b-12d3-a456-426614174003', email: 'user2@example.com', role: 'user' }
 ];
 
-// Demo audit logs for testing
+// Demo audit logs for testing - only used as fallback if database fails
 const DEMO_AUDIT_LOGS = [
   {
     id: '1',
@@ -88,9 +86,27 @@ export function useRoleManagement() {
 
       if (error) {
         console.log('Error fetching user role:', error);
-        // If there's an error, set a default role of 'user'
-        setUserRole('user');
+        
+        // Try to create a default role for this user
+        try {
+          const { data: insertData, error: insertError } = await supabase
+            .from('user_roles')
+            .insert({ user_id: user.id, role: 'user' })
+            .select();
+            
+          if (!insertError && insertData) {
+            console.log("Created default user role");
+            setUserRole('user');
+          } else {
+            console.error("Failed to create default user role:", insertError);
+            setUserRole('user'); // Fallback to user role
+          }
+        } catch (insertCatchErr) {
+          console.error("Error creating default user role:", insertCatchErr);
+          setUserRole('user');
+        }
       } else {
+        console.log("Successfully fetched user role:", data);
         setUserRole(data.role as UserRole);
       }
     } catch (error: any) {
@@ -162,35 +178,63 @@ export function useRoleManagement() {
       setLoading(true);
       console.log("Attempting to fetch real user data for admin");
       
-      // First attempt to get auth users via an RPC (service role function)
+      // First try to get users via auth.users table through an RPC function
       // This would be implemented as a Supabase Edge Function in a production app
-      let usersData: UserWithEmailAndRole[] = [];
-      let gotRealUsers = false;
+      try {
+        const { data: authUsers, error: authError } = await supabase
+          .rpc('get_auth_users');
+          
+        if (!authError && authUsers && authUsers.length > 0) {
+          console.log("Got real auth users from RPC:", authUsers.length);
+          
+          // Get roles for these users
+          const { data: roleData, error: roleError } = await supabase
+            .from('user_roles')
+            .select('*');
+            
+          if (!roleError && roleData) {
+            console.log("Got role data:", roleData.length);
+            
+            // Map roles to users
+            const mappedUsers: UserWithEmailAndRole[] = authUsers.map((authUser: any) => {
+              const userRole = roleData.find((r: any) => r.user_id === authUser.id);
+              return {
+                id: authUser.id,
+                email: authUser.email || `user-${authUser.id.substring(0, 8)}@example.com`,
+                role: userRole ? userRole.role as UserRole : 'user'
+              };
+            });
+            
+            console.log("Mapped users with roles:", mappedUsers.length);
+            setUsersWithEmails(mappedUsers);
+            setUsedDemoData(false);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (rpcError) {
+        console.error("Error calling RPC function:", rpcError);
+      }
       
-      // Try to fetch users from user_roles
+      // Fallback to user_roles and profiles
       try {
         const { data: roleData, error: roleError } = await supabase
           .from('user_roles')
           .select('*');
           
-        if (roleError) {
-          throw roleError;
-        }
-        
-        if (roleData && roleData.length > 0) {
+        if (!roleError && roleData && roleData.length > 0) {
           // Get user emails - in a real app, you would use a join with user profiles
-          // or create a secure RPC function that can access auth.users
           const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select('*');
             
           if (!profilesError && profilesData) {
             // Map roles to users with emails
-            usersData = roleData.map((role: any) => {
-              const userProfile = profilesData.find(p => p.id === role.user_id);
+            const usersData = roleData.map((role: any) => {
+              const userProfile = profilesData.find((p: any) => p.id === role.user_id);
               // Create a meaningful email from available data or use a placeholder
               const email = userProfile ? 
-                `${userProfile.first_name || ''}.${userProfile.last_name || ''}@example.com`.toLowerCase() : 
+                `${userProfile.first_name || ''}${userProfile.last_name ? '.' + userProfile.last_name : ''}@example.com`.toLowerCase() : 
                 `user-${role.user_id.substring(0, 8)}@example.com`;
                 
               return {
@@ -200,22 +244,20 @@ export function useRoleManagement() {
               };
             });
             
-            gotRealUsers = true;
-            console.log("Got real user data:", usersData.length, "users");
+            console.log("Got real user data from profiles:", usersData.length);
+            setUsersWithEmails(usersData);
+            setUsedDemoData(false);
+            setLoading(false);
+            return;
           }
         }
       } catch (error) {
         console.error("Error fetching user roles and profiles:", error);
       }
       
-      if (!gotRealUsers) {
-        // If we couldn't get real users, use demo data but log this situation
-        console.warn("Could not fetch real user data, using demo data instead");
-        usersData = [...DEMO_USERS];
-        setUsedDemoData(true);
-      } else {
-        setUsedDemoData(false);
-      }
+      // If all approaches failed, use demo data
+      console.warn("Could not fetch real user data, using demo data instead");
+      const usersData = [...DEMO_USERS];
       
       // Add any missing special users
       const knownEmails = new Set(usersData.map(u => u.email.toLowerCase()));
@@ -228,7 +270,7 @@ export function useRoleManagement() {
         });
       }
       
-      // Add the k8716610@gmail.com admin user if not already there
+      // Add the special admin user if not already there
       if (!knownEmails.has('k8716610@gmail.com')) {
         usersData.push({
           id: '00000000-0000-0000-0000-000000000000', // Special admin UUID
@@ -237,8 +279,9 @@ export function useRoleManagement() {
         });
       }
       
-      console.log("Users with emails and roles:", usersData);
+      console.log("Using demo users with emails and roles:", usersData);
       setUsersWithEmails(usersData);
+      setUsedDemoData(true);
     } catch (error: any) {
       console.error('Error fetching users with emails:', error);
       toast({
@@ -248,7 +291,7 @@ export function useRoleManagement() {
       });
       
       // Fallback to demo data
-      setUsersWithEmails(DEMO_USERS);
+      setUsersWithEmails([...DEMO_USERS]);
       setUsedDemoData(true);
     } finally {
       setLoading(false);
@@ -405,10 +448,11 @@ export function useRoleManagement() {
         .order('created_at', { ascending: false });
         
       if (error || !data || data.length === 0) {
-        console.log("Using demo audit logs for", email);
+        console.log("No real audit logs found for", email, "using demo logs");
         return DEMO_AUDIT_LOGS;
       }
       
+      console.log("Found real audit logs for", email, data.length, "logs");
       return data;
     } catch (error) {
       console.error("Error fetching audit logs for user:", error);
@@ -440,6 +484,7 @@ export function useRoleManagement() {
     isAdminOrManager,
     assignRole,
     fetchAllUserRoles,
+    fetchUsersWithEmailsAndRoles,
     searchUsersByEmail,
     getUserByEmail,
     getAuditLogsByEmail,
