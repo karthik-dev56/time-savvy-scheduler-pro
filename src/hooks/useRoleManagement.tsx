@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -178,46 +177,80 @@ export function useRoleManagement() {
       setLoading(true);
       console.log("Attempting to fetch real user data for admin");
       
-      // We can't query the auth.users table directly, so we'll use what we can access
-      try {
-        // Try using user_roles and profiles together
-        const { data: roleData, error: roleError } = await supabase
-          .from('user_roles')
+      // First, try to get user roles
+      const { data: roleData, error: roleError } = await supabase
+        .from('user_roles')
+        .select('*');
+        
+      if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
+        console.log("Got role data:", roleData.length);
+        
+        // Get user profiles
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
           .select('*');
           
-        if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
-          console.log("Got role data:", roleData.length);
+        if (!profilesError && profilesData && Array.isArray(profilesData)) {
+          console.log("Got profiles data:", profilesData.length);
           
-          // Get user emails - in a real app, you would use a join with user profiles
-          const { data: profilesData, error: profilesError } = await supabase
-            .from('profiles')
-            .select('*');
+          // Map roles to users with emails
+          const usersData = roleData.map((role: any) => {
+            const userProfile = profilesData.find((p: any) => p.id === role.user_id);
             
-          if (!profilesError && profilesData && Array.isArray(profilesData)) {
-            // Map roles to users with emails
-            const usersData = roleData.map((role: any) => {
-              const userProfile = profilesData.find((p: any) => p.id === role.user_id);
-              // Create a meaningful email from available data or use a placeholder
-              const email = userProfile ? 
-                `${userProfile.first_name || ''}${userProfile.last_name ? '.' + userProfile.last_name : ''}@example.com`.toLowerCase() : 
-                `user-${role.user_id.substring(0, 8)}@example.com`;
-                
-              return {
-                id: role.user_id,
-                email: email,
-                role: role.role as UserRole
-              };
-            });
-            
-            console.log("Got real user data from profiles:", usersData.length);
-            setUsersWithEmails(usersData);
-            setUsedDemoData(false);
-            setLoading(false);
-            return;
-          }
+            // Create a meaningful email from available data or use a placeholder
+            let email = "";
+            if (userProfile) {
+              if (userProfile.email) {
+                email = userProfile.email;
+              } else {
+                email = `${userProfile.first_name || ''}${userProfile.last_name ? '.' + userProfile.last_name : ''}@example.com`.toLowerCase();
+                if (email === '@example.com') {
+                  email = `user-${role.user_id.substring(0, 8)}@example.com`;
+                }
+              }
+            } else {
+              email = `user-${role.user_id.substring(0, 8)}@example.com`;
+            }
+              
+            return {
+              id: role.user_id,
+              email: email,
+              role: role.role as UserRole
+            };
+          });
+          
+          console.log("Got real user data from profiles and roles:", usersData.length);
+          setUsersWithEmails(usersData);
+          setUsedDemoData(false);
+          setLoading(false);
+          return;
         }
-      } catch (error) {
-        console.error("Error fetching user roles and profiles:", error);
+      }
+      
+      // If we couldn't get combined data, try a different approach
+      console.warn("Could not fetch combined user data, trying profiles only");
+      
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*');
+        
+      if (!profilesError && profiles && profiles.length > 0) {
+        console.log("Got profiles only:", profiles.length);
+        
+        // Create users with default user role
+        const usersData = profiles.map((profile: any) => {
+          return {
+            id: profile.id,
+            email: profile.email || `user-${profile.id.substring(0, 8)}@example.com`,
+            role: 'user' as UserRole
+          };
+        });
+        
+        console.log("Created users from profiles:", usersData.length);
+        setUsersWithEmails(usersData);
+        setUsedDemoData(false);
+        setLoading(false);
+        return;
       }
       
       // If all approaches failed, use demo data

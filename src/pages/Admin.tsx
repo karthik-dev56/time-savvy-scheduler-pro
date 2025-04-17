@@ -33,7 +33,7 @@ import {
 
 const AdminPage = () => {
   const { user } = useAuth();
-  const { userRole, usersWithEmails, fetchUsersWithEmailsAndRoles } = useRoleManagement();
+  const { userRole, fetchUsersWithEmailsAndRoles } = useRoleManagement();
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -71,127 +71,69 @@ const AdminPage = () => {
         setRegisteredUsers(users);
         console.log("Fetched registered users:", users.length);
         
-        // Fetch appointment count and detailed appointments
-        const { count: apptCount, error: apptError } = await supabase
+        // Fetch appointment count directly
+        const { data: appointments } = await supabase
           .from('appointments')
-          .select('*', { count: 'exact', head: true });
+          .select('*');
           
-        if (!apptError && apptCount !== null) {
-          setAppointmentCount(apptCount);
-          console.log("Fetched real appointment count:", apptCount);
-        } else {
-          console.error("Error fetching appointment count:", apptError);
-          setAppointmentCount(0);
-        }
+        const apptCount = appointments ? appointments.length : 0;
+        setAppointmentCount(apptCount);
+        console.log("Fetched real appointment count:", apptCount);
         
-        // Get detailed appointments
-        const appointments = await getDetailedAppointments();
-        setDetailedAppointments(appointments);
-        console.log("Fetched detailed appointments:", appointments.length);
+        // Fetch detailed appointments
+        const detailedAppts = await getDetailedAppointments();
+        setDetailedAppointments(detailedAppts);
+        console.log("Fetched detailed appointments:", detailedAppts.length);
         
-        // Fetch AI metrics - use real data only
-        const { data: metricsData, error: metricsError } = await supabase
-          .from('ai_prediction_metrics')
-          .select('*')
-          .single();
-          
-        if (!metricsError && metricsData) {
-          setAiMetrics(metricsData);
-          console.log("Fetched real AI metrics:", metricsData);
-        } else {
+        // Fetch AI metrics with the updated method
+        try {
+          const metrics = await getAIPredictionMetrics();
+          setAiMetrics(metrics);
+          console.log("Fetched AI metrics:", metrics);
+        } catch (metricsError) {
           console.error("Error fetching AI metrics:", metricsError);
-          // Create default metrics if none exist
-          const { data: newMetrics, error: createError } = await supabase
-            .from('ai_prediction_metrics')
-            .insert({
-              no_show_accuracy: 87,
-              duration_accuracy: 92,
-              reschedule_acceptance: 79
-            })
-            .select()
-            .single();
-            
-          if (!createError && newMetrics) {
-            setAiMetrics(newMetrics);
-            console.log("Created and fetched new AI metrics:", newMetrics);
-          } else {
-            console.error("Failed to create default metrics:", createError);
-          }
         }
         
-        // Fetch AI predictions - use real data only
-        const { data: predictionsData, error: predictionsError } = await supabase
-          .from('ai_predictions')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(10);
-          
-        if (!predictionsError && predictionsData && predictionsData.length > 0) {
-          setAiPredictions(predictionsData);
-          console.log("Fetched real AI predictions:", predictionsData.length, "records");
-        } else {
-          console.error("Error or no data fetching AI predictions:", predictionsError);
-          // Create sample predictions if none exist
-          const samplePredictions = [
-            { 
-              type: 'No-Show', 
-              prediction: 'Low Risk (15%)', 
-              accuracy: 100
-            },
-            { 
-              type: 'Duration', 
-              prediction: '45 minutes', 
-              accuracy: 78
-            },
-            { 
-              type: 'Reschedule', 
-              prediction: 'Suggested 3 slots', 
-              accuracy: 90
-            }
-          ];
-          
-          const { data: newPredictions, error: createPredError } = await supabase
-            .from('ai_predictions')
-            .insert(samplePredictions)
-            .select();
-            
-          if (!createPredError && newPredictions) {
-            setAiPredictions(newPredictions);
-            console.log("Created and fetched new AI predictions:", newPredictions.length, "records");
-          } else {
-            console.error("Failed to create sample predictions:", createPredError);
-          }
+        // Fetch AI predictions
+        try {
+          const predictions = await getAIPredictions();
+          setAiPredictions(predictions);
+          console.log("Fetched AI predictions:", predictions.length);
+        } catch (predictionsError) {
+          console.error("Error fetching AI predictions:", predictionsError);
         }
         
         // Fetch audit logs
-        const { data: logs, error: logsError } = await supabase
-          .from('audit_logs')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(50);
-          
-        if (!logsError && logs) {
-          setAuditLogs(logs);
-          console.log("Fetched real audit logs:", logs.length, "records");
-        } else {
-          console.error("Error fetching audit logs:", logsError);
-          // Create a sample audit log if none exist
-          if (!logs || logs.length === 0) {
-            const { data: newLog, error: createLogError } = await supabase
+        try {
+          const { data: logs } = await supabase
+            .from('audit_logs')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50);
+            
+          if (logs && logs.length > 0) {
+            setAuditLogs(logs);
+            console.log("Fetched audit logs:", logs.length);
+          } else {
+            console.log("No audit logs found");
+            
+            // Create a default audit log
+            const { data: newLog } = await supabase
               .from('audit_logs')
               .insert({
-                user_id: user?.id,
+                user_id: user?.id || '00000000-0000-0000-0000-000000000000',
                 action: 'admin_login',
                 table_name: 'auth',
                 details: { source: 'admin_panel' }
               })
               .select();
               
-            if (!createLogError && newLog) {
+            if (newLog) {
               setAuditLogs(newLog);
-              console.log("Created and fetched new audit log");
             }
           }
+        } catch (logsError) {
+          console.error("Error fetching audit logs:", logsError);
         }
       } catch (error) {
         console.error("Error in admin data fetching:", error);
@@ -211,6 +153,75 @@ const AdminPage = () => {
       fetchAdminData();
     }
   }, [user, userRole, toast, isSpecialAdmin, fetchUsersWithEmailsAndRoles]);
+  
+  // Function to refresh admin data
+  const refreshAdminData = async () => {
+    toast({
+      title: "Refreshing data",
+      description: "Fetching the latest data from the database...",
+    });
+    
+    setLoading(true);
+    try {
+      // Get direct user count
+      const count = await getUserCount();
+      setUserCount(count);
+      
+      // Get registered users
+      const users = await getRegisteredUsers();
+      setRegisteredUsers(users);
+      
+      // Get appointment count directly
+      const { data: appointments } = await supabase
+        .from('appointments')
+        .select('*');
+        
+      const apptCount = appointments ? appointments.length : 0;
+      setAppointmentCount(apptCount);
+      
+      // Get detailed appointments
+      const detailedAppts = await getDetailedAppointments();
+      setDetailedAppointments(detailedAppts);
+      
+      // Get AI metrics and predictions
+      const metrics = await getAIPredictionMetrics();
+      setAiMetrics(metrics);
+      
+      const predictions = await getAIPredictions();
+      setAiPredictions(predictions);
+      
+      // Get audit logs
+      const { data: logs } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+        
+      if (logs) {
+        setAuditLogs(logs);
+      }
+      
+      toast({
+        title: "Data refreshed",
+        description: "Admin dashboard data has been updated.",
+      });
+    } catch (error) {
+      console.error("Error refreshing admin data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to refresh admin data.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleString();
+  };
   
   // Generate data for prediction accuracy chart
   const getPredictionAccuracyData = () => {
@@ -264,92 +275,6 @@ const AdminPage = () => {
   
   // Chart colors
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
-  
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleString();
-  };
-  
-  // Function to refresh admin data
-  const refreshAdminData = async () => {
-    toast({
-      title: "Refreshing data",
-      description: "Fetching the latest data from the database...",
-    });
-    
-    if (user && (userRole === 'admin' || user.user_metadata?.is_super_admin || isSpecialAdmin)) {
-      setLoading(true);
-      try {
-        // Re-fetch users
-        await fetchUsersWithEmailsAndRoles();
-        
-        // Get direct user count and registered users
-        const count = await getUserCount();
-        setUserCount(count);
-        
-        const users = await getRegisteredUsers();
-        setRegisteredUsers(users);
-        
-        // Re-fetch appointment count and detailed appointments
-        const { count: apptCount, error: apptError } = await supabase
-          .from('appointments')
-          .select('*', { count: 'exact', head: true });
-          
-        if (!apptError && apptCount !== null) {
-          setAppointmentCount(apptCount);
-        }
-        
-        const appointments = await getDetailedAppointments();
-        setDetailedAppointments(appointments);
-        
-        // Re-fetch AI metrics and predictions
-        const { data: metrics } = await supabase
-          .from('ai_prediction_metrics')
-          .select('*')
-          .single();
-          
-        if (metrics) {
-          setAiMetrics(metrics);
-        }
-        
-        const { data: predictions } = await supabase
-          .from('ai_predictions')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(10);
-          
-        if (predictions) {
-          setAiPredictions(predictions);
-        }
-        
-        // Re-fetch audit logs
-        const { data: logs } = await supabase
-          .from('audit_logs')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(50);
-          
-        if (logs) {
-          setAuditLogs(logs);
-        }
-        
-        toast({
-          title: "Data refreshed",
-          description: "Admin dashboard data has been updated.",
-        });
-      } catch (error) {
-        console.error("Error refreshing admin data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to refresh admin data.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
   
   return (
     <Layout>
@@ -427,14 +352,15 @@ const AdminPage = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {registeredUsers.slice(0, 5).map(user => (
-                          <tr key={user.id} className="text-sm border-b border-border last:border-0">
-                            <td className="py-2">{(user.id || "").substring(0, 8)}...</td>
-                            <td className="py-2">{user.first_name || ""} {user.last_name || ""}</td>
-                            <td className="py-2">{formatDate(user.created_at)}</td>
-                          </tr>
-                        ))}
-                        {registeredUsers.length === 0 && (
+                        {registeredUsers.length > 0 ? (
+                          registeredUsers.slice(0, 5).map((user, index) => (
+                            <tr key={user.id || index} className="text-sm border-b border-border last:border-0">
+                              <td className="py-2">{(user.id || "").substring(0, 8)}...</td>
+                              <td className="py-2">{user.first_name || ""} {user.last_name || ""}</td>
+                              <td className="py-2">{formatDate(user.created_at)}</td>
+                            </tr>
+                          ))
+                        ) : (
                           <tr className="text-sm">
                             <td colSpan={3} className="py-2 text-center">No registered users found</td>
                           </tr>
@@ -460,18 +386,19 @@ const AdminPage = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {detailedAppointments.slice(0, 5).map(appointment => (
-                          <tr key={appointment.id} className="text-sm border-b border-border last:border-0">
-                            <td className="py-2">{appointment.title}</td>
-                            <td className="py-2">{formatDate(appointment.start_time)}</td>
-                            <td className="py-2">
-                              <span className="px-2 py-1 rounded-md text-xs bg-green-100 text-green-800">
-                                Active
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                        {detailedAppointments.length === 0 && (
+                        {detailedAppointments.length > 0 ? (
+                          detailedAppointments.slice(0, 5).map((appointment, index) => (
+                            <tr key={appointment.id || index} className="text-sm border-b border-border last:border-0">
+                              <td className="py-2">{appointment.title}</td>
+                              <td className="py-2">{formatDate(appointment.start_time)}</td>
+                              <td className="py-2">
+                                <span className="px-2 py-1 rounded-md text-xs bg-green-100 text-green-800">
+                                  Active
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
                           <tr className="text-sm">
                             <td colSpan={3} className="py-2 text-center">No appointments found</td>
                           </tr>
@@ -530,16 +457,17 @@ const AdminPage = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {registeredUsers.map(user => (
-                        <tr key={user.id} className="text-sm border-b border-border last:border-0">
-                          <td className="py-2">{(user.id || "").substring(0, 8)}...</td>
-                          <td className="py-2">{user.first_name || ""} {user.last_name || ""}</td>
-                          <td className="py-2">{user.user_roles?.role || "user"}</td>
-                          <td className="py-2">{formatDate(user.created_at)}</td>
-                          <td className="py-2">{formatDate(user.updated_at)}</td>
-                        </tr>
-                      ))}
-                      {registeredUsers.length === 0 && (
+                      {registeredUsers.length > 0 ? (
+                        registeredUsers.map((user, index) => (
+                          <tr key={user.id || index} className="text-sm border-b border-border last:border-0">
+                            <td className="py-2">{(user.id || "").substring(0, 8)}...</td>
+                            <td className="py-2">{user.first_name || ""} {user.last_name || ""}</td>
+                            <td className="py-2">{user.user_roles?.role || "user"}</td>
+                            <td className="py-2">{formatDate(user.created_at)}</td>
+                            <td className="py-2">{formatDate(user.updated_at)}</td>
+                          </tr>
+                        ))
+                      ) : (
                         <tr className="text-sm">
                           <td colSpan={5} className="py-2 text-center">No registered users found</td>
                         </tr>
@@ -570,25 +498,26 @@ const AdminPage = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {detailedAppointments.map(appointment => (
-                        <tr key={appointment.id} className="text-sm border-b border-border last:border-0">
-                          <td className="py-2">{appointment.title}</td>
-                          <td className="py-2">{(appointment.user_id || "").substring(0, 8)}...</td>
-                          <td className="py-2">{formatDate(appointment.start_time)}</td>
-                          <td className="py-2">{formatDate(appointment.end_time)}</td>
-                          <td className="py-2">
-                            <span className={`px-2 py-1 rounded-md text-xs ${
-                              appointment.priority === 'high' ? 'bg-red-100 text-red-800' :
-                              appointment.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-green-100 text-green-800'
-                            }`}>
-                              {appointment.priority}
-                            </span>
-                          </td>
-                          <td className="py-2">{formatDate(appointment.created_at)}</td>
-                        </tr>
-                      ))}
-                      {detailedAppointments.length === 0 && (
+                      {detailedAppointments.length > 0 ? (
+                        detailedAppointments.map((appointment, index) => (
+                          <tr key={appointment.id || index} className="text-sm border-b border-border last:border-0">
+                            <td className="py-2">{appointment.title}</td>
+                            <td className="py-2">{(appointment.user_id || "").substring(0, 8)}...</td>
+                            <td className="py-2">{formatDate(appointment.start_time)}</td>
+                            <td className="py-2">{formatDate(appointment.end_time)}</td>
+                            <td className="py-2">
+                              <span className={`px-2 py-1 rounded-md text-xs ${
+                                appointment.priority === 'high' ? 'bg-red-100 text-red-800' :
+                                appointment.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {appointment.priority}
+                              </span>
+                            </td>
+                            <td className="py-2">{formatDate(appointment.created_at)}</td>
+                          </tr>
+                        ))
+                      ) : (
                         <tr className="text-sm">
                           <td colSpan={6} className="py-2 text-center">No appointments found</td>
                         </tr>
