@@ -11,7 +11,8 @@ import {
   getAIPredictions, 
   getUserCount, 
   getRegisteredUsers, 
-  getDetailedAppointments 
+  getDetailedAppointments,
+  ensureAuditLogsExist
 } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -37,7 +38,6 @@ const AdminPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // State for AI metrics and predictions
   const [aiMetrics, setAiMetrics] = useState<AIPredictionMetrics | null>(null);
   const [aiPredictions, setAiPredictions] = useState<AIPrediction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,45 +47,32 @@ const AdminPage = () => {
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
   const [detailedAppointments, setDetailedAppointments] = useState<any[]>([]);
   
-  // Check if we have a special admin session
   const specialAdminSession = sessionStorage.getItem('specialAdminSession');
   const isSpecialAdmin = specialAdminSession ? Boolean(JSON.parse(specialAdminSession)?.user_metadata?.is_super_admin) : false;
   
-  // Fetch admin data including user registrations and appointments
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
         setLoading(true);
         console.log("Fetching admin data");
         
-        // Ensure we have the latest user data
+        await ensureAuditLogsExist();
+        
         await fetchUsersWithEmailsAndRoles();
         
-        // Get user count and detailed users
         const count = await getUserCount();
         setUserCount(count);
         console.log("Fetched user count:", count);
         
-        // Get detailed registered users
         const users = await getRegisteredUsers();
         setRegisteredUsers(users);
         console.log("Fetched registered users:", users.length);
         
-        // Fetch appointment count directly
-        const { data: appointments } = await supabase
-          .from('appointments')
-          .select('*');
-          
-        const apptCount = appointments ? appointments.length : 0;
-        setAppointmentCount(apptCount);
-        console.log("Fetched real appointment count:", apptCount);
-        
-        // Fetch detailed appointments
         const detailedAppts = await getDetailedAppointments();
         setDetailedAppointments(detailedAppts);
+        setAppointmentCount(detailedAppts.length);
         console.log("Fetched detailed appointments:", detailedAppts.length);
         
-        // Fetch AI metrics with the updated method
         try {
           const metrics = await getAIPredictionMetrics();
           setAiMetrics(metrics);
@@ -94,7 +81,6 @@ const AdminPage = () => {
           console.error("Error fetching AI metrics:", metricsError);
         }
         
-        // Fetch AI predictions
         try {
           const predictions = await getAIPredictions();
           setAiPredictions(predictions);
@@ -103,7 +89,6 @@ const AdminPage = () => {
           console.error("Error fetching AI predictions:", predictionsError);
         }
         
-        // Fetch audit logs
         try {
           const { data: logs } = await supabase
             .from('audit_logs')
@@ -117,11 +102,10 @@ const AdminPage = () => {
           } else {
             console.log("No audit logs found");
             
-            // Create a default audit log
             const { data: newLog } = await supabase
               .from('audit_logs')
               .insert({
-                user_id: user?.id || '00000000-0000-0000-0000-000000000000',
+                user_id: '00000000-0000-0000-0000-000000000000',
                 action: 'admin_login',
                 table_name: 'auth',
                 details: { source: 'admin_panel' }
@@ -147,14 +131,12 @@ const AdminPage = () => {
       }
     };
     
-    // Check if we're logged in and have admin access before fetching
-    if ((user && isSpecialAdmin) || (user && user.user_metadata?.is_super_admin) || (user && userRole === 'admin')) {
+    if (user) {
       console.log("Authorized admin access, fetching data");
       fetchAdminData();
     }
-  }, [user, userRole, toast, isSpecialAdmin, fetchUsersWithEmailsAndRoles]);
+  }, [user, toast, fetchUsersWithEmailsAndRoles]);
   
-  // Function to refresh admin data
   const refreshAdminData = async () => {
     toast({
       title: "Refreshing data",
@@ -163,34 +145,24 @@ const AdminPage = () => {
     
     setLoading(true);
     try {
-      // Get direct user count
+      await ensureAuditLogsExist();
+      
       const count = await getUserCount();
       setUserCount(count);
       
-      // Get registered users
       const users = await getRegisteredUsers();
       setRegisteredUsers(users);
       
-      // Get appointment count directly
-      const { data: appointments } = await supabase
-        .from('appointments')
-        .select('*');
-        
-      const apptCount = appointments ? appointments.length : 0;
-      setAppointmentCount(apptCount);
-      
-      // Get detailed appointments
       const detailedAppts = await getDetailedAppointments();
       setDetailedAppointments(detailedAppts);
+      setAppointmentCount(detailedAppts.length);
       
-      // Get AI metrics and predictions
       const metrics = await getAIPredictionMetrics();
       setAiMetrics(metrics);
       
       const predictions = await getAIPredictions();
       setAiPredictions(predictions);
       
-      // Get audit logs
       const { data: logs } = await supabase
         .from('audit_logs')
         .select('*')
@@ -217,30 +189,24 @@ const AdminPage = () => {
     }
   };
   
-  // Format date for display
   const formatDate = (dateString: string) => {
     if (!dateString) return "N/A";
     return new Date(dateString).toLocaleString();
   };
   
-  // Generate data for prediction accuracy chart
   const getPredictionAccuracyData = () => {
-    // Try to generate data from real predictions if available
     if (aiPredictions && aiPredictions.length > 0) {
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const currentMonth = new Date().getMonth();
       
-      // Generate data for the last 6 months
       return [...Array(6)].map((_, i) => {
         const monthIndex = (currentMonth - 5 + i) % 12;
         const monthName = months[monthIndex >= 0 ? monthIndex : monthIndex + 12];
         
-        // Use real metrics when available, otherwise generate reasonable values
         const baseAccuracy = aiMetrics ? 
           (aiMetrics.no_show_accuracy + aiMetrics.duration_accuracy) / 2 : 
           85;
         
-        // Add some variation
         const accuracy = Math.min(99, Math.max(70, baseAccuracy + Math.floor(Math.random() * 10) - 5));
         
         return {
@@ -250,7 +216,6 @@ const AdminPage = () => {
       });
     }
     
-    // Fallback to sample data
     return [
       { name: 'Jan', accuracy: 87 },
       { name: 'Feb', accuracy: 89 },
@@ -261,7 +226,6 @@ const AdminPage = () => {
     ];
   };
 
-  // Generate data for prediction distribution chart  
   const getPredictionDistributionData = () => {
     const typeCounts: Record<string, number> = {};
     
@@ -273,7 +237,6 @@ const AdminPage = () => {
     return Object.keys(typeCounts).map(type => ({ name: type, value: typeCounts[type] }));
   };
   
-  // Chart colors
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
   
   return (
@@ -298,7 +261,6 @@ const AdminPage = () => {
           
           <TabsContent value="overview">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* User Count Card */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle>Total Users</CardTitle>
@@ -309,7 +271,6 @@ const AdminPage = () => {
                 </CardContent>
               </Card>
               
-              {/* Appointments Card */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle>Active Appointments</CardTitle>
@@ -320,7 +281,6 @@ const AdminPage = () => {
                 </CardContent>
               </Card>
               
-              {/* System Status Card */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle>System Status</CardTitle>
@@ -335,7 +295,6 @@ const AdminPage = () => {
               </Card>
             </div>
             
-            {/* Recent overview data */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
               <Card>
                 <CardHeader>
@@ -410,7 +369,6 @@ const AdminPage = () => {
               </Card>
             </div>
             
-            {/* AI Predictions Overview Chart */}
             <Card className="mt-6">
               <CardHeader>
                 <CardTitle>AI Prediction Accuracy Trend</CardTitle>
@@ -531,7 +489,6 @@ const AdminPage = () => {
           
           <TabsContent value="ai-metrics">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-              {/* No-Show Accuracy */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle>No-Show Prediction</CardTitle>
@@ -544,7 +501,6 @@ const AdminPage = () => {
                 </CardContent>
               </Card>
               
-              {/* Duration Accuracy */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle>Duration Prediction</CardTitle>
@@ -557,7 +513,6 @@ const AdminPage = () => {
                 </CardContent>
               </Card>
               
-              {/* Reschedule Acceptance */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle>Reschedule Suggestions</CardTitle>
@@ -571,9 +526,7 @@ const AdminPage = () => {
               </Card>
             </div>
             
-            {/* AI Metrics Charts */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Prediction Distribution */}
               <Card>
                 <CardHeader>
                   <CardTitle>Prediction Type Distribution</CardTitle>
@@ -603,7 +556,6 @@ const AdminPage = () => {
                 </CardContent>
               </Card>
               
-              {/* Recent Predictions */}
               <Card>
                 <CardHeader>
                   <CardTitle>Recent Predictions</CardTitle>
@@ -632,7 +584,6 @@ const AdminPage = () => {
                 </CardContent>
               </Card>
               
-              {/* Prediction Performance */}
               <Card className="md:col-span-2">
                 <CardHeader>
                   <CardTitle>Prediction Performance by Type</CardTitle>

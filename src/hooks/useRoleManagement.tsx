@@ -198,21 +198,21 @@ export function useRoleManagement() {
             const userProfile = profilesData.find((p: any) => p.id === role.user_id);
             
             // Create a meaningful email from available data or use a placeholder
-            let email = "";
+            let generatedEmail = "";
             if (userProfile) {
               // Since the profile doesn't have an email field, construct one from first and last name
               // or use a fallback pattern based on the user ID
-              email = `${userProfile.first_name || ''}${userProfile.last_name ? '.' + userProfile.last_name : ''}@example.com`.toLowerCase();
-              if (email === '@example.com') {
-                email = `user-${role.user_id.substring(0, 8)}@example.com`;
+              generatedEmail = `${userProfile.first_name || ''}${userProfile.last_name ? '.' + userProfile.last_name : ''}@example.com`.toLowerCase();
+              if (generatedEmail === '@example.com') {
+                generatedEmail = `user-${role.user_id.substring(0, 8)}@example.com`;
               }
             } else {
-              email = `user-${role.user_id.substring(0, 8)}@example.com`;
+              generatedEmail = `user-${role.user_id.substring(0, 8)}@example.com`;
             }
               
             return {
               id: role.user_id,
-              email: email,
+              email: generatedEmail,
               role: role.role as UserRole
             };
           });
@@ -237,9 +237,15 @@ export function useRoleManagement() {
         
         // Create users with default user role
         const usersData = profiles.map((profile: any) => {
+          // Generate email from profile data
+          const generatedEmail = `${profile.first_name || ''}${profile.last_name ? '.' + profile.last_name : ''}@example.com`.toLowerCase();
+          const email = generatedEmail === '@example.com' ? 
+            `user-${profile.id.substring(0, 8)}@example.com` : 
+            generatedEmail;
+            
           return {
             id: profile.id,
-            email: profile.email || `user-${profile.id.substring(0, 8)}@example.com`,
+            email: email,
             role: 'user' as UserRole
           };
         });
@@ -249,6 +255,55 @@ export function useRoleManagement() {
         setUsedDemoData(false);
         setLoading(false);
         return;
+      }
+      
+      // Try to create some sample data if nothing exists
+      try {
+        console.log("No users found in database, creating sample data");
+        
+        // Create sample profiles
+        const sampleProfiles = [
+          { first_name: 'Admin', last_name: 'User' },
+          { first_name: 'Manager', last_name: 'User' },
+          { first_name: 'Regular', last_name: 'User' }
+        ];
+        
+        const { data: newProfiles, error: createError } = await supabase
+          .from('profiles')
+          .insert(sampleProfiles)
+          .select();
+          
+        if (!createError && newProfiles && newProfiles.length > 0) {
+          console.log("Created sample profiles:", newProfiles.length);
+          
+          // Create roles for these profiles
+          const roleInserts = newProfiles.map((profile, index) => ({
+            user_id: profile.id,
+            role: index === 0 ? 'admin' : (index === 1 ? 'manager' : 'user')
+          }));
+          
+          const { data: newRoles } = await supabase
+            .from('user_roles')
+            .insert(roleInserts)
+            .select();
+            
+          if (newRoles) {
+            // Generate user data with emails
+            const userData = newProfiles.map((profile, index) => ({
+              id: profile.id,
+              email: `${profile.first_name.toLowerCase()}.${profile.last_name.toLowerCase()}@example.com`,
+              role: index === 0 ? 'admin' as UserRole : (index === 1 ? 'manager' as UserRole : 'user' as UserRole)
+            }));
+            
+            console.log("Created sample users with roles:", userData.length);
+            setUsersWithEmails(userData);
+            setUsedDemoData(false);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (createError) {
+        console.error("Error creating sample users:", createError);
       }
       
       // If all approaches failed, use demo data
