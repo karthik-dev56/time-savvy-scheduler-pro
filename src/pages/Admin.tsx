@@ -19,8 +19,7 @@ import {
   getAIPredictionMetrics, 
   getAIPredictions, 
   getUserCount, 
-  getRegisteredUsers, 
-  getDetailedAppointments,
+  getRegisteredUsers,
   ensureAuditLogsExist,
   debugAppointments
 } from '@/integrations/supabase/client';
@@ -55,7 +54,7 @@ const AdminPage = () => {
   const [userCount, setUserCount] = useState<number>(0);
   const [appointmentCount, setAppointmentCount] = useState<number>(0);
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
-  const [detailedAppointments, setDetailedAppointments] = useState<any[]>([]);
+  const [supabaseAppointments, setSupabaseAppointments] = useState<any[]>([]);
   
   useEffect(() => {
     const fetchAdminData = async () => {
@@ -64,8 +63,6 @@ const AdminPage = () => {
         console.log("Fetching admin data");
         
         await ensureAuditLogsExist();
-        
-        // Make sure we fetch current user roles
         await fetchUsersWithEmailsAndRoles();
         
         const count = await getUserCount();
@@ -74,38 +71,36 @@ const AdminPage = () => {
         const users = await getRegisteredUsers();
         setRegisteredUsers(users);
         
-        // Debug appointments
-        await debugAppointments();
-        
-        // Make sure we fetch all appointments
-        await fetchAppointments();
-        
-        // Get appointment data with direct call to Supabase
+        // Fetch appointments directly from Supabase
         try {
           console.log("Directly fetching appointments from Supabase");
-          const { data: supabaseAppointments, error } = await supabase
+          const { data, error } = await supabase
             .from('appointments')
             .select('*')
             .order('created_at', { ascending: false });
             
           if (error) {
             console.error("Error directly fetching appointments:", error);
-          } else if (supabaseAppointments && supabaseAppointments.length > 0) {
-            console.log("Successfully fetched appointments directly:", supabaseAppointments.length);
-            setDetailedAppointments(supabaseAppointments);
-            setAppointmentCount(supabaseAppointments.length);
+            toast({
+              title: "Error",
+              description: "Failed to fetch appointments from database",
+              variant: "destructive",
+            });
+          } else if (data && data.length > 0) {
+            console.log("Successfully fetched appointments directly:", data.length);
+            setSupabaseAppointments(data);
+            setAppointmentCount(data.length);
           } else {
-            // Fallback to hook appointments
-            const detailedAppts = await getDetailedAppointments();
-            setDetailedAppointments(detailedAppts);
-            setAppointmentCount(detailedAppts.length || appointments.length);
+            console.log("No appointments found in Supabase, fetching from hook");
+            await fetchAppointments();
+            setSupabaseAppointments(appointments);
+            setAppointmentCount(appointments.length);
           }
         } catch (appointmentError) {
           console.error("Error in direct appointment fetch:", appointmentError);
-          // Fallback to regular method
-          const detailedAppts = await getDetailedAppointments();
-          setDetailedAppointments(detailedAppts);
-          setAppointmentCount(detailedAppts.length || appointments.length);
+          await fetchAppointments();
+          setSupabaseAppointments(appointments);
+          setAppointmentCount(appointments.length);
         }
         
         try {
@@ -169,24 +164,25 @@ const AdminPage = () => {
       
       // Get appointment data with direct call to Supabase
       try {
-        const { data: supabaseAppointments, error } = await supabase
+        const { data, error } = await supabase
           .from('appointments')
           .select('*')
           .order('created_at', { ascending: false });
           
         if (error) {
           console.error("Error refreshing appointments directly:", error);
-        } else if (supabaseAppointments && supabaseAppointments.length > 0) {
-          console.log("Successfully refreshed appointments directly:", supabaseAppointments.length);
-          setDetailedAppointments(supabaseAppointments);
-          setAppointmentCount(supabaseAppointments.length);
+        } else if (data && data.length > 0) {
+          console.log("Successfully refreshed appointments directly:", data.length);
+          setSupabaseAppointments(data);
+          setAppointmentCount(data.length);
+        } else {
+          setSupabaseAppointments(appointments);
+          setAppointmentCount(appointments.length);
         }
       } catch (appointmentError) {
         console.error("Error in direct appointment refresh:", appointmentError);
-        // Fallback to regular method
-        const detailedAppts = await getDetailedAppointments();
-        setDetailedAppointments(detailedAppts);
-        setAppointmentCount(detailedAppts.length || appointments.length);
+        setSupabaseAppointments(appointments);
+        setAppointmentCount(appointments.length);
       }
       
       const count = await getUserCount();
@@ -275,7 +271,7 @@ const AdminPage = () => {
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-bold">
-                    {appointmentCount || detailedAppointments.length || appointments.length || 0}
+                    {appointmentCount || supabaseAppointments.length || appointments.length || 0}
                   </p>
                   <p className="text-xs text-muted-foreground">Total appointments in system</p>
                 </CardContent>
@@ -312,26 +308,8 @@ const AdminPage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {detailedAppointments.length > 0 ? (
-                        detailedAppointments.slice(0, 5).map((appointment, index) => (
-                          <TableRow key={appointment.id || index}>
-                            <TableCell className="font-medium">{appointment.title}</TableCell>
-                            <TableCell>{(appointment.user_id || "").substring(0, 8)}...</TableCell>
-                            <TableCell>{formatDate(appointment.start_time)}</TableCell>
-                            <TableCell>{formatDate(appointment.end_time)}</TableCell>
-                            <TableCell>
-                              <span className={`px-2 py-1 rounded-md text-xs ${
-                                appointment.priority === 'high' ? 'bg-red-100 text-red-800' :
-                                appointment.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-green-100 text-green-800'
-                              }`}>
-                                {appointment.priority}
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : appointments.length > 0 ? (
-                        appointments.slice(0, 5).map((appointment, index) => (
+                      {supabaseAppointments.length > 0 ? (
+                        supabaseAppointments.slice(0, 5).map((appointment, index) => (
                           <TableRow key={appointment.id || index}>
                             <TableCell className="font-medium">{appointment.title}</TableCell>
                             <TableCell>{(appointment.user_id || "").substring(0, 8)}...</TableCell>
@@ -385,28 +363,8 @@ const AdminPage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {detailedAppointments.length > 0 ? (
-                        detailedAppointments.map((appointment, index) => (
-                          <TableRow key={appointment.id || index}>
-                            <TableCell className="font-medium">{appointment.title}</TableCell>
-                            <TableCell className="max-w-xs truncate">{appointment.description || "N/A"}</TableCell>
-                            <TableCell>{(appointment.user_id || "").substring(0, 8)}...</TableCell>
-                            <TableCell>{formatDate(appointment.start_time)}</TableCell>
-                            <TableCell>{formatDate(appointment.end_time)}</TableCell>
-                            <TableCell>
-                              <span className={`px-2 py-1 rounded-md text-xs ${
-                                appointment.priority === 'high' ? 'bg-red-100 text-red-800' :
-                                appointment.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-green-100 text-green-800'
-                              }`}>
-                                {appointment.priority}
-                              </span>
-                            </TableCell>
-                            <TableCell>{formatDate(appointment.created_at)}</TableCell>
-                          </TableRow>
-                        ))
-                      ) : appointments.length > 0 ? (
-                        appointments.map((appointment, index) => (
+                      {supabaseAppointments.length > 0 ? (
+                        supabaseAppointments.map((appointment, index) => (
                           <TableRow key={appointment.id || index}>
                             <TableCell className="font-medium">{appointment.title}</TableCell>
                             <TableCell className="max-w-xs truncate">{appointment.description || "N/A"}</TableCell>
