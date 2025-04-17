@@ -21,10 +21,10 @@ import {
   getUserCount, 
   getRegisteredUsers, 
   getDetailedAppointments,
-  ensureAuditLogsExist
+  ensureAuditLogsExist,
+  debugAppointments
 } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
 import type { AIPredictionMetrics, AIPrediction } from '@/integrations/supabase/client';
 import { 
   AreaChart, 
@@ -40,13 +40,13 @@ import {
   Pie,
   Cell
 } from 'recharts';
+import { Calendar, Clock, User, Users } from 'lucide-react';
 
 const AdminPage = () => {
   const { user } = useAuth();
   const { userRole, fetchUsersWithEmailsAndRoles, usersWithEmails } = useRoleManagement();
   const { appointments, fetchAppointments } = useAppointments();
   const { toast } = useToast();
-  const navigate = useNavigate();
   
   const [aiMetrics, setAiMetrics] = useState<AIPredictionMetrics | null>(null);
   const [aiPredictions, setAiPredictions] = useState<AIPrediction[]>([]);
@@ -56,9 +56,6 @@ const AdminPage = () => {
   const [appointmentCount, setAppointmentCount] = useState<number>(0);
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
   const [detailedAppointments, setDetailedAppointments] = useState<any[]>([]);
-  
-  const specialAdminSession = sessionStorage.getItem('specialAdminSession');
-  const isSpecialAdmin = specialAdminSession ? Boolean(JSON.parse(specialAdminSession)?.user_metadata?.is_super_admin) : false;
   
   useEffect(() => {
     const fetchAdminData = async () => {
@@ -73,25 +70,47 @@ const AdminPage = () => {
         
         const count = await getUserCount();
         setUserCount(count > 0 ? count : usersWithEmails.length);
-        console.log("Fetched user count:", count);
         
         const users = await getRegisteredUsers();
         setRegisteredUsers(users);
-        console.log("Fetched registered users:", users.length);
+        
+        // Debug appointments
+        await debugAppointments();
         
         // Make sure we fetch all appointments
         await fetchAppointments();
         
-        // Get appointment data
-        const detailedAppts = await getDetailedAppointments();
-        setDetailedAppointments(detailedAppts);
-        setAppointmentCount(detailedAppts.length || appointments.length);
-        console.log("Fetched detailed appointments:", detailedAppts.length || appointments.length);
+        // Get appointment data with direct call to Supabase
+        try {
+          console.log("Directly fetching appointments from Supabase");
+          const { data: supabaseAppointments, error } = await supabase
+            .from('appointments')
+            .select('*')
+            .order('created_at', { ascending: false });
+            
+          if (error) {
+            console.error("Error directly fetching appointments:", error);
+          } else if (supabaseAppointments && supabaseAppointments.length > 0) {
+            console.log("Successfully fetched appointments directly:", supabaseAppointments.length);
+            setDetailedAppointments(supabaseAppointments);
+            setAppointmentCount(supabaseAppointments.length);
+          } else {
+            // Fallback to hook appointments
+            const detailedAppts = await getDetailedAppointments();
+            setDetailedAppointments(detailedAppts);
+            setAppointmentCount(detailedAppts.length || appointments.length);
+          }
+        } catch (appointmentError) {
+          console.error("Error in direct appointment fetch:", appointmentError);
+          // Fallback to regular method
+          const detailedAppts = await getDetailedAppointments();
+          setDetailedAppointments(detailedAppts);
+          setAppointmentCount(detailedAppts.length || appointments.length);
+        }
         
         try {
           const metrics = await getAIPredictionMetrics();
           setAiMetrics(metrics);
-          console.log("Fetched AI metrics:", metrics);
         } catch (metricsError) {
           console.error("Error fetching AI metrics:", metricsError);
         }
@@ -99,7 +118,6 @@ const AdminPage = () => {
         try {
           const predictions = await getAIPredictions();
           setAiPredictions(predictions);
-          console.log("Fetched AI predictions:", predictions.length);
         } catch (predictionsError) {
           console.error("Error fetching AI predictions:", predictionsError);
         }
@@ -113,23 +131,6 @@ const AdminPage = () => {
             
           if (logs && logs.length > 0) {
             setAuditLogs(logs);
-            console.log("Fetched audit logs:", logs.length);
-          } else {
-            console.log("No audit logs found");
-            
-            const { data: newLog } = await supabase
-              .from('audit_logs')
-              .insert({
-                user_id: '00000000-0000-0000-0000-000000000000',
-                action: 'admin_login',
-                table_name: 'auth',
-                details: { source: 'admin_panel' }
-              })
-              .select();
-              
-            if (newLog) {
-              setAuditLogs(newLog);
-            }
           }
         } catch (logsError) {
           console.error("Error fetching audit logs:", logsError);
@@ -160,17 +161,39 @@ const AdminPage = () => {
     
     setLoading(true);
     try {
-      await ensureAuditLogsExist();
+      // Debug appointments to see what's in the database
+      await debugAppointments();
+      
+      // Make sure we fetch all appointments first
+      await fetchAppointments();
+      
+      // Get appointment data with direct call to Supabase
+      try {
+        const { data: supabaseAppointments, error } = await supabase
+          .from('appointments')
+          .select('*')
+          .order('created_at', { ascending: false });
+          
+        if (error) {
+          console.error("Error refreshing appointments directly:", error);
+        } else if (supabaseAppointments && supabaseAppointments.length > 0) {
+          console.log("Successfully refreshed appointments directly:", supabaseAppointments.length);
+          setDetailedAppointments(supabaseAppointments);
+          setAppointmentCount(supabaseAppointments.length);
+        }
+      } catch (appointmentError) {
+        console.error("Error in direct appointment refresh:", appointmentError);
+        // Fallback to regular method
+        const detailedAppts = await getDetailedAppointments();
+        setDetailedAppointments(detailedAppts);
+        setAppointmentCount(detailedAppts.length || appointments.length);
+      }
       
       const count = await getUserCount();
       setUserCount(count);
       
       const users = await getRegisteredUsers();
       setRegisteredUsers(users);
-      
-      const detailedAppts = await getDetailedAppointments();
-      setDetailedAppointments(detailedAppts);
-      setAppointmentCount(detailedAppts.length);
       
       const metrics = await getAIPredictionMetrics();
       setAiMetrics(metrics);
@@ -208,52 +231,7 @@ const AdminPage = () => {
     if (!dateString) return "N/A";
     return new Date(dateString).toLocaleString();
   };
-  
-  const getPredictionAccuracyData = () => {
-    if (aiPredictions && aiPredictions.length > 0) {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const currentMonth = new Date().getMonth();
-      
-      return [...Array(6)].map((_, i) => {
-        const monthIndex = (currentMonth - 5 + i) % 12;
-        const monthName = months[monthIndex >= 0 ? monthIndex : monthIndex + 12];
-        
-        const baseAccuracy = aiMetrics ? 
-          (aiMetrics.no_show_accuracy + aiMetrics.duration_accuracy) / 2 : 
-          85;
-        
-        const accuracy = Math.min(99, Math.max(70, baseAccuracy + Math.floor(Math.random() * 10) - 5));
-        
-        return {
-          name: monthName,
-          accuracy
-        };
-      });
-    }
-    
-    return [
-      { name: 'Jan', accuracy: 87 },
-      { name: 'Feb', accuracy: 89 },
-      { name: 'Mar', accuracy: 91 },
-      { name: 'Apr', accuracy: 93 },
-      { name: 'May', accuracy: 94 },
-      { name: 'Jun', accuracy: 92 },
-    ];
-  };
 
-  const getPredictionDistributionData = () => {
-    const typeCounts: Record<string, number> = {};
-    
-    aiPredictions.forEach(prediction => {
-      const type = prediction.type || 'Unknown';
-      typeCounts[type] = (typeCounts[type] || 0) + 1;
-    });
-    
-    return Object.keys(typeCounts).map(type => ({ name: type, value: typeCounts[type] }));
-  };
-  
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
-  
   return (
     <Layout>
       <div className="max-w-7xl mx-auto">
@@ -264,34 +242,41 @@ const AdminPage = () => {
           </Button>
         </div>
         
-        <Tabs defaultValue="overview" className="space-y-6">
+        <Tabs defaultValue="appointments" className="space-y-6">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="users">Registered Users</TabsTrigger>
             <TabsTrigger value="appointments">Appointments</TabsTrigger>
+            <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="ai-metrics">AI Metrics</TabsTrigger>
             <TabsTrigger value="audit-logs">Audit Logs</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
           
           <TabsContent value="overview">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle>Total Users</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Total Users
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{userCount || usersWithEmails.length}</p>
+                  <p className="text-3xl font-bold">{userCount || usersWithEmails.length || 0}</p>
                   <p className="text-xs text-muted-foreground">Registered users in system</p>
                 </CardContent>
               </Card>
               
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle>Active Appointments</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5" /> 
+                    Appointments
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{appointmentCount || appointments.length}</p>
+                  <p className="text-3xl font-bold">
+                    {appointmentCount || detailedAppointments.length || appointments.length || 0}
+                  </p>
                   <p className="text-xs text-muted-foreground">Total appointments in system</p>
                 </CardContent>
               </Card>
@@ -310,139 +295,64 @@ const AdminPage = () => {
               </Card>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent User Registrations</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-64 overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>User ID</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Registered</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {registeredUsers.length > 0 ? (
-                          registeredUsers.slice(0, 5).map((user, index) => (
-                            <TableRow key={user.id || index}>
-                              <TableCell className="font-medium">{(user.id || "").substring(0, 8)}...</TableCell>
-                              <TableCell>{user.first_name || ""} {user.last_name || ""}</TableCell>
-                              <TableCell>{user.user_roles?.role || "user"}</TableCell>
-                              <TableCell>{formatDate(user.created_at)}</TableCell>
-                            </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-center">No registered users found</TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Appointments</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-64 overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Title</TableHead>
-                          <TableHead>Date/Time</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {appointments.length > 0 ? (
-                          appointments.slice(0, 5).map((appointment, index) => (
-                            <TableRow key={appointment.id || index}>
-                              <TableCell className="font-medium">{appointment.title}</TableCell>
-                              <TableCell>{formatDate(appointment.start_time)}</TableCell>
-                              <TableCell>
-                                <span className="px-2 py-1 rounded-md text-xs bg-green-100 text-green-800">
-                                  Active
-                                </span>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell colSpan={3} className="text-center">No appointments found</TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            
             <Card className="mt-6">
               <CardHeader>
-                <CardTitle>AI Prediction Accuracy Trend</CardTitle>
+                <CardTitle>Recent Appointments</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={getPredictionAccuracyData()}
-                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <RechartsTooltip />
-                      <Area 
-                        type="monotone" 
-                        dataKey="accuracy" 
-                        stroke="#8884d8" 
-                        fill="#8884d8" 
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="users">
-            <Card>
-              <CardHeader>
-                <CardTitle>Registered Users</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[500px] overflow-auto">
+                <div className="h-[300px] overflow-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>User ID</TableHead>
-                        <TableHead>Name/Email</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead>Registration Date</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>User</TableHead>
+                        <TableHead>Start Time</TableHead>
+                        <TableHead>End Time</TableHead>
+                        <TableHead>Priority</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {usersWithEmails.length > 0 ? (
-                        usersWithEmails.map((user, index) => (
-                          <TableRow key={user.id || index}>
-                            <TableCell className="font-medium">{(user.id || "").substring(0, 8)}...</TableCell>
-                            <TableCell>{user.email}</TableCell>
-                            <TableCell>{user.role}</TableCell>
-                            <TableCell>{formatDate(registeredUsers.find(u => u.id === user.id)?.created_at || new Date().toISOString())}</TableCell>
+                      {detailedAppointments.length > 0 ? (
+                        detailedAppointments.slice(0, 5).map((appointment, index) => (
+                          <TableRow key={appointment.id || index}>
+                            <TableCell className="font-medium">{appointment.title}</TableCell>
+                            <TableCell>{(appointment.user_id || "").substring(0, 8)}...</TableCell>
+                            <TableCell>{formatDate(appointment.start_time)}</TableCell>
+                            <TableCell>{formatDate(appointment.end_time)}</TableCell>
+                            <TableCell>
+                              <span className={`px-2 py-1 rounded-md text-xs ${
+                                appointment.priority === 'high' ? 'bg-red-100 text-red-800' :
+                                appointment.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {appointment.priority}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : appointments.length > 0 ? (
+                        appointments.slice(0, 5).map((appointment, index) => (
+                          <TableRow key={appointment.id || index}>
+                            <TableCell className="font-medium">{appointment.title}</TableCell>
+                            <TableCell>{(appointment.user_id || "").substring(0, 8)}...</TableCell>
+                            <TableCell>{formatDate(appointment.start_time)}</TableCell>
+                            <TableCell>{formatDate(appointment.end_time)}</TableCell>
+                            <TableCell>
+                              <span className={`px-2 py-1 rounded-md text-xs ${
+                                appointment.priority === 'high' ? 'bg-red-100 text-red-800' :
+                                appointment.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {appointment.priority}
+                              </span>
+                            </TableCell>
                           </TableRow>
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={4} className="text-center">No registered users found</TableCell>
+                          <TableCell colSpan={5} className="text-center py-8">
+                            No appointments found. Try refreshing the data.
+                          </TableCell>
                         </TableRow>
                       )}
                     </TableBody>
@@ -455,7 +365,10 @@ const AdminPage = () => {
           <TabsContent value="appointments">
             <Card>
               <CardHeader>
-                <CardTitle>All Appointments</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  All Appointments from Supabase
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="h-[500px] overflow-auto">
@@ -463,6 +376,7 @@ const AdminPage = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Title</TableHead>
+                        <TableHead>Description</TableHead>
                         <TableHead>User ID</TableHead>
                         <TableHead>Start Time</TableHead>
                         <TableHead>End Time</TableHead>
@@ -471,10 +385,31 @@ const AdminPage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {appointments.length > 0 ? (
+                      {detailedAppointments.length > 0 ? (
+                        detailedAppointments.map((appointment, index) => (
+                          <TableRow key={appointment.id || index}>
+                            <TableCell className="font-medium">{appointment.title}</TableCell>
+                            <TableCell className="max-w-xs truncate">{appointment.description || "N/A"}</TableCell>
+                            <TableCell>{(appointment.user_id || "").substring(0, 8)}...</TableCell>
+                            <TableCell>{formatDate(appointment.start_time)}</TableCell>
+                            <TableCell>{formatDate(appointment.end_time)}</TableCell>
+                            <TableCell>
+                              <span className={`px-2 py-1 rounded-md text-xs ${
+                                appointment.priority === 'high' ? 'bg-red-100 text-red-800' :
+                                appointment.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {appointment.priority}
+                              </span>
+                            </TableCell>
+                            <TableCell>{formatDate(appointment.created_at)}</TableCell>
+                          </TableRow>
+                        ))
+                      ) : appointments.length > 0 ? (
                         appointments.map((appointment, index) => (
                           <TableRow key={appointment.id || index}>
                             <TableCell className="font-medium">{appointment.title}</TableCell>
+                            <TableCell className="max-w-xs truncate">{appointment.description || "N/A"}</TableCell>
                             <TableCell>{(appointment.user_id || "").substring(0, 8)}...</TableCell>
                             <TableCell>{formatDate(appointment.start_time)}</TableCell>
                             <TableCell>{formatDate(appointment.end_time)}</TableCell>
@@ -492,7 +427,65 @@ const AdminPage = () => {
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center">No appointments found</TableCell>
+                          <TableCell colSpan={7} className="text-center py-10">
+                            <div className="flex flex-col items-center justify-center space-y-3">
+                              <Calendar className="h-12 w-12 text-gray-400" />
+                              <div>
+                                <p className="text-lg font-medium">No appointments found</p>
+                                <p className="text-sm text-gray-500">Try refreshing the data or adding appointments to your account.</p>
+                              </div>
+                              <Button onClick={refreshAdminData}>Refresh Data</Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="users">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Registered Users
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[500px] overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User ID</TableHead>
+                        <TableHead>Name/Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Registration Date</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {usersWithEmails.length > 0 ? (
+                        usersWithEmails.map((user, index) => (
+                          <TableRow key={user.id || index}>
+                            <TableCell className="font-medium">{(user.id || "").substring(0, 8)}...</TableCell>
+                            <TableCell>{user.email || `${registeredUsers.find(u => u.id === user.id)?.first_name || 'User'} ${registeredUsers.find(u => u.id === user.id)?.last_name || index}`}</TableCell>
+                            <TableCell>{user.role || 'user'}</TableCell>
+                            <TableCell>{formatDate(registeredUsers.find(u => u.id === user.id)?.created_at || new Date().toISOString())}</TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-10">
+                            <div className="flex flex-col items-center justify-center space-y-3">
+                              <Users className="h-12 w-12 text-gray-400" />
+                              <div>
+                                <p className="text-lg font-medium">No registered users found</p>
+                                <p className="text-sm text-gray-500">User data will appear here once accounts are created.</p>
+                              </div>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       )}
                     </TableBody>
@@ -667,45 +660,18 @@ const AdminPage = () => {
               </CardContent>
             </Card>
           </TabsContent>
-          
-          <TabsContent value="settings">
-            <Card>
-              <CardHeader>
-                <CardTitle>Admin Settings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-lg font-medium">User Management</h3>
-                    <p className="text-muted-foreground text-sm mb-2">
-                      Manage system users and permissions
-                    </p>
-                    <Button>Manage Users</Button>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-lg font-medium">System Configuration</h3>
-                    <p className="text-muted-foreground text-sm mb-2">
-                      Configure system settings and defaults
-                    </p>
-                    <Button variant="outline">Edit Configuration</Button>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-lg font-medium">AI Training</h3>
-                    <p className="text-muted-foreground text-sm mb-2">
-                      Manage AI training data and prediction models
-                    </p>
-                    <Button variant="outline">View Training Data</Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </div>
     </Layout>
   );
 };
+
+const getPredictionDistributionData = () => {
+  const typeCounts: Record<string, number> = {};
+  
+  return [];
+};
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
 export default AdminPage;
