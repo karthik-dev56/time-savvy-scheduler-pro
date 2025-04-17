@@ -14,18 +14,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatRelative } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Shield, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 const AppointmentDisplay = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   const fetchAppointments = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to view appointment data",
+        variant: "destructive",
+      });
+      navigate('/auth', { state: { returnPath: '/supabase-data' } });
+      return;
+    }
+
     try {
       setLoading(true);
       
+      // Get the appointments based on authentication status
       const { data, error } = await supabase
         .from('appointments')
         .select('*')
@@ -35,13 +50,13 @@ const AppointmentDisplay = () => {
         console.error('Error fetching appointments:', error);
         toast({
           title: "Error",
-          description: "Could not load appointments from Supabase",
+          description: "Could not load appointments from Supabase: " + error.message,
           variant: "destructive",
         });
         return;
       }
 
-      console.log('Supabase appointments:', data);
+      console.log('Supabase authenticated appointments:', data);
       setAppointments(data || []);
     } catch (error) {
       console.error('Exception during appointment fetch:', error);
@@ -57,7 +72,7 @@ const AppointmentDisplay = () => {
 
   useEffect(() => {
     fetchAppointments();
-  }, []);
+  }, [user]);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "N/A";
@@ -69,10 +84,32 @@ const AppointmentDisplay = () => {
     }
   };
 
+  if (!user) {
+    return (
+      <Card className="w-full">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Authentication Required</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center p-6">
+            <Shield className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Please Sign In</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              You need to be signed in to view appointment data
+            </p>
+            <Button onClick={() => navigate('/auth', { state: { returnPath: '/supabase-data' } })}>
+              Go to Sign In
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-full">
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Appointments from Supabase</CardTitle>
+        <CardTitle>Your Appointments from Supabase</CardTitle>
         <Button 
           variant="outline" 
           size="sm" 
@@ -125,8 +162,9 @@ const AppointmentDisplay = () => {
                   <TableRow>
                     <TableCell colSpan={5} className="text-center h-32">
                       <div className="flex flex-col items-center justify-center">
+                        <AlertTriangle className="h-12 w-12 text-yellow-500 mb-2" />
                         <p className="text-lg font-medium text-gray-500">No appointments found</p>
-                        <p className="text-sm text-gray-400 mb-4">Appointments from Supabase will appear here</p>
+                        <p className="text-sm text-gray-400 mb-4">You don't have any appointments in the database yet</p>
                         <Button onClick={fetchAppointments} variant="outline">
                           Try Again
                         </Button>
