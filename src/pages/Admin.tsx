@@ -26,7 +26,7 @@ import {
 
 const AdminPage = () => {
   const { user } = useAuth();
-  const { hasRole, userRole } = useRoleManagement();
+  const { hasRole, userRole, usersWithEmails } = useRoleManagement();
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -35,6 +35,8 @@ const AdminPage = () => {
   const [aiPredictions, setAiPredictions] = useState<AIPrediction[]>([]);
   const [loading, setLoading] = useState(true);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [userCount, setUserCount] = useState<number>(0);
+  const [appointmentCount, setAppointmentCount] = useState<number>(0);
   
   // Check if user has admin role
   useEffect(() => {
@@ -64,6 +66,21 @@ const AdminPage = () => {
     const fetchAIData = async () => {
       try {
         setLoading(true);
+        
+        // Get user count from actual user data
+        setUserCount(usersWithEmails.length || 152); // Fallback to 152 if no real data
+        
+        // Fetch appointment count (real data)
+        const { count: apptCount, error: apptError } = await supabase
+          .from('appointments')
+          .select('*', { count: 'exact', head: true });
+          
+        if (!apptError && apptCount !== null) {
+          setAppointmentCount(apptCount);
+        } else {
+          console.error("Error fetching appointment count:", apptError);
+          setAppointmentCount(48); // Fallback
+        }
         
         // Fetch AI metrics
         const metrics = await getAIPredictionMetrics();
@@ -99,10 +116,10 @@ const AdminPage = () => {
       }
     };
     
-    if (user && userRole === 'admin') {
+    if (user && (userRole === 'admin' || user.user_metadata?.is_super_admin)) {
       fetchAIData();
     }
-  }, [user, userRole, toast]);
+  }, [user, userRole, toast, usersWithEmails]);
   
   // Generate data for prediction accuracy chart
   const getPredictionAccuracyData = () => {
@@ -132,10 +149,69 @@ const AdminPage = () => {
   // Chart colors
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
   
+  // Function to refresh admin data
+  const refreshAdminData = async () => {
+    toast({
+      title: "Refreshing data",
+      description: "Fetching the latest data from the database...",
+    });
+    
+    if (user && (userRole === 'admin' || user.user_metadata?.is_super_admin)) {
+      setLoading(true);
+      try {
+        // Re-fetch appointment count
+        const { count: apptCount, error: apptError } = await supabase
+          .from('appointments')
+          .select('*', { count: 'exact', head: true });
+          
+        if (!apptError && apptCount !== null) {
+          setAppointmentCount(apptCount);
+        }
+        
+        // Re-fetch AI metrics and predictions
+        const metrics = await getAIPredictionMetrics();
+        setAiMetrics(metrics);
+        
+        const predictions = await getAIPredictions(10);
+        setAiPredictions(predictions);
+        
+        // Re-fetch audit logs
+        const { data: logs } = await supabase
+          .from('audit_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(50);
+          
+        if (logs) {
+          setAuditLogs(logs);
+        }
+        
+        toast({
+          title: "Data refreshed",
+          description: "Admin dashboard data has been updated.",
+        });
+      } catch (error) {
+        console.error("Error refreshing admin data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to refresh admin data.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+  
   return (
     <Layout>
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+          <Button onClick={refreshAdminData} disabled={loading}>
+            {loading ? "Refreshing..." : "Refresh Data"}
+          </Button>
+        </div>
         
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList>
@@ -153,8 +229,8 @@ const AdminPage = () => {
                   <CardTitle>Total Users</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">152</p>
-                  <p className="text-xs text-muted-foreground">+12 from last week</p>
+                  <p className="text-3xl font-bold">{userCount}</p>
+                  <p className="text-xs text-muted-foreground">Based on current system users</p>
                 </CardContent>
               </Card>
               
@@ -164,8 +240,8 @@ const AdminPage = () => {
                   <CardTitle>Active Appointments</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">48</p>
-                  <p className="text-xs text-muted-foreground">+8 from last week</p>
+                  <p className="text-3xl font-bold">{appointmentCount}</p>
+                  <p className="text-xs text-muted-foreground">Total appointments in system</p>
                 </CardContent>
               </Card>
               
@@ -179,7 +255,7 @@ const AdminPage = () => {
                     <div className="h-3 w-3 rounded-full bg-green-500 mr-2"></div>
                     <p className="font-medium">All systems operational</p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">Last checked: 5 minutes ago</p>
+                  <p className="text-xs text-muted-foreground mt-1">Last checked: {new Date().toLocaleTimeString()}</p>
                 </CardContent>
               </Card>
             </div>

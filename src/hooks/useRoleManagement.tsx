@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -69,7 +70,7 @@ export function useRoleManagement() {
     }
 
     // Check for special admin user first
-    if (user.id === 'admin-special' || (user.app_metadata && user.app_metadata.role === 'admin')) {
+    if (user.user_metadata?.is_super_admin || (user.app_metadata && user.app_metadata.role === 'admin')) {
       setUserRole('admin');
       setLoading(false);
       return;
@@ -106,6 +107,11 @@ export function useRoleManagement() {
     
     console.log("Setting up real-time role updates for current user");
     
+    // Skip real-time updates for super admin
+    if (user.user_metadata?.is_super_admin) {
+      return;
+    }
+    
     // Subscribe to changes in user's role
     const channel = supabase
       .channel('user-role-changes')
@@ -125,7 +131,7 @@ export function useRoleManagement() {
           }
           
           // Refresh all roles if admin
-          if (userRole === 'admin' || user.id === 'admin-special') {
+          if (userRole === 'admin' || user.user_metadata?.is_super_admin) {
             fetchAllUserRoles();
             fetchUsersWithEmailsAndRoles();
           }
@@ -144,7 +150,7 @@ export function useRoleManagement() {
   // Improved function to fetch users with emails along with their roles
   const fetchUsersWithEmailsAndRoles = async () => {
     // Check if the special admin user
-    if (user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin')) {
+    if (user?.user_metadata?.is_super_admin || (user?.app_metadata && user.app_metadata.role === 'admin')) {
       // For the special admin user, we don't need to check the database role
       // Just continue with the function
     } else if (!user || userRole !== 'admin') {
@@ -154,69 +160,85 @@ export function useRoleManagement() {
 
     try {
       setLoading(true);
+      console.log("Attempting to fetch real user data for admin");
       
-      // In a real application, we would fetch user data from auth.users via a secure RPC
-      // For this demo, we'll simulate it with user_roles data and add email patterns
-      const { data: roleData, error: roleError } = await supabase
-        .from('user_roles')
-        .select('*');
-
-      if (roleError) {
-        console.error('Error fetching user roles with emails:', roleError);
-        toast({
-          title: "Error",
-          description: "Could not load user data",
-          variant: "destructive",
-        });
-        
-        // Fallback to demo data
-        console.log("Using demo data for users");
-        setUsersWithEmails(DEMO_USERS);
-        setUsedDemoData(true);
-        return;
-      }
-
-      // In a real app, this would come from auth.users
-      // For our demo, if we have no user_roles data, use demo data
-      if (!roleData || roleData.length === 0) {
-        console.log("No user roles found, using demo data");
-        setUsersWithEmails(DEMO_USERS);
-        setUsedDemoData(true);
-        return;
-      }
-
-      // Map roles to include simulated email addresses
-      const usersData = roleData.map((role: any) => {
-        // Create a more realistic email pattern for demo purposes
-        const userId = role.user_id;
-        
-        // Add a recognizable email for our test user
-        if (userId === '123e4567-e89b-12d3-a456-426614174004') {
-          return {
-            id: userId,
-            email: 'prokarthik1449@gmail.com',
-            role: role.role as UserRole
-          };
+      // First attempt to get auth users via an RPC (service role function)
+      // This would be implemented as a Supabase Edge Function in a production app
+      let usersData: UserWithEmailAndRole[] = [];
+      let gotRealUsers = false;
+      
+      // Try to fetch users from user_roles
+      try {
+        const { data: roleData, error: roleError } = await supabase
+          .from('user_roles')
+          .select('*');
+          
+        if (roleError) {
+          throw roleError;
         }
         
-        const email = `user-${userId.substring(0, 8)}@example.com`;
-        
-        return {
-          id: userId,
-          email: email,
-          role: role.role as UserRole
-        };
-      });
+        if (roleData && roleData.length > 0) {
+          // Get user emails - in a real app, you would use a join with user profiles
+          // or create a secure RPC function that can access auth.users
+          const { data: profilesData, error: profilesError } = await supabase
+            .from('profiles')
+            .select('*');
+            
+          if (!profilesError && profilesData) {
+            // Map roles to users with emails
+            usersData = roleData.map((role: any) => {
+              const userProfile = profilesData.find(p => p.id === role.user_id);
+              // Create a meaningful email from available data or use a placeholder
+              const email = userProfile ? 
+                `${userProfile.first_name || ''}.${userProfile.last_name || ''}@example.com`.toLowerCase() : 
+                `user-${role.user_id.substring(0, 8)}@example.com`;
+                
+              return {
+                id: role.user_id,
+                email: email,
+                role: role.role as UserRole
+              };
+            });
+            
+            gotRealUsers = true;
+            console.log("Got real user data:", usersData.length, "users");
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching user roles and profiles:", error);
+      }
       
-      // Add our demo users if we don't have many real users
-      if (usersData.length < 3) {
-        console.log("Adding some demo users to enhance the interface");
-        usersData.push(...DEMO_USERS.filter(u => !usersData.some(ud => ud.id === u.id)));
+      if (!gotRealUsers) {
+        // If we couldn't get real users, use demo data but log this situation
+        console.warn("Could not fetch real user data, using demo data instead");
+        usersData = [...DEMO_USERS];
+        setUsedDemoData(true);
+      } else {
+        setUsedDemoData(false);
+      }
+      
+      // Add any missing special users
+      const knownEmails = new Set(usersData.map(u => u.email.toLowerCase()));
+      if (user.email && !knownEmails.has(user.email.toLowerCase())) {
+        // Add current user if not already in the list
+        usersData.push({
+          id: user.id,
+          email: user.email,
+          role: 'admin'
+        });
+      }
+      
+      // Add the k8716610@gmail.com admin user if not already there
+      if (!knownEmails.has('k8716610@gmail.com')) {
+        usersData.push({
+          id: '00000000-0000-0000-0000-000000000000', // Special admin UUID
+          email: 'k8716610@gmail.com',
+          role: 'admin'
+        });
       }
       
       console.log("Users with emails and roles:", usersData);
       setUsersWithEmails(usersData);
-      setUsedDemoData(false);
     } catch (error: any) {
       console.error('Error fetching users with emails:', error);
       toast({
@@ -236,7 +258,7 @@ export function useRoleManagement() {
   // Fetch all users with their roles (for admin panel)
   const fetchAllUserRoles = async () => {
     // Check if the special admin user
-    if (user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin')) {
+    if (user?.user_metadata?.is_super_admin || (user?.app_metadata && user.app_metadata.role === 'admin')) {
       // For the special admin user, we don't need to check the database role
       // Just continue with the function
     } else if (!user || userRole !== 'admin') {
@@ -274,7 +296,7 @@ export function useRoleManagement() {
   // Assign a role to a user (admin only)
   const assignRole = async (userId: string, role: UserRole) => {
     // Check if the special admin user
-    if (user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin')) {
+    if (user?.user_metadata?.is_super_admin || (user?.app_metadata && user.app_metadata.role === 'admin')) {
       // Special admin is always allowed to assign roles
     } else if (!user || userRole !== 'admin') {
       toast({
@@ -341,27 +363,23 @@ export function useRoleManagement() {
     }
   };
 
-  // Check if the current user has a specific role
   const hasRole = (role: UserRole): boolean => {
-    if (user?.id === 'admin-special' && role === 'admin') {
+    if (user?.user_metadata?.is_super_admin && role === 'admin') {
       return true;
     }
     return userRole === role;
   };
 
-  // Check if the current user is an admin or manager
   const isAdminOrManager = (): boolean => {
-    if (user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin')) {
+    if (user?.user_metadata?.is_super_admin || (user?.app_metadata && user.app_metadata.role === 'admin')) {
       return true;
     }
     return userRole === 'admin' || userRole === 'manager';
   };
 
-  // Improved search function that works even with demo data
   const searchUsersByEmail = (query: string): UserWithEmailAndRole[] => {
     if (!query) return usersWithEmails;
     
-    // Log what we're searching for to help debug
     console.log("Searching for users with email containing:", query);
     console.log("Available users to search:", usersWithEmails);
     
@@ -373,11 +391,9 @@ export function useRoleManagement() {
     return filtered;
   };
 
-  // Get audit logs for a specific user by email
   const getAuditLogsByEmail = useCallback(async (email: string) => {
     if (!email) return [];
     
-    // Find the user with this email
     const user = usersWithEmails.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (!user) return DEMO_AUDIT_LOGS;
     
@@ -400,7 +416,6 @@ export function useRoleManagement() {
     }
   }, [usersWithEmails]);
 
-  // Get user by email
   const getUserByEmail = (email: string): UserWithEmailAndRole | null => {
     return usersWithEmails.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
   };
@@ -410,14 +425,14 @@ export function useRoleManagement() {
   }, [user]);
 
   useEffect(() => {
-    if (userRole === 'admin' || user?.id === 'admin-special') {
+    if (userRole === 'admin' || user?.user_metadata?.is_super_admin) {
       fetchAllUserRoles();
       fetchUsersWithEmailsAndRoles();
     }
   }, [userRole, user]);
 
   return {
-    userRole: user?.id === 'admin-special' ? 'admin' : userRole,
+    userRole: user?.user_metadata?.is_super_admin ? 'admin' : userRole,
     loading,
     allUserRoles,
     usersWithEmails,

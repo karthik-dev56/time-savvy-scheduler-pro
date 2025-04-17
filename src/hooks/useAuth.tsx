@@ -64,13 +64,15 @@ export function useAuth() {
       if (email === "k8716610@gmail.com" && password === "9848+-ab") {
         console.log("Special admin login detected");
         
-        // Create a special admin session object
+        // Create a special admin session object with a valid UUID format
+        // This will prevent database errors when querying with this ID
+        const adminUuid = '00000000-0000-0000-0000-000000000000'; // Use a reserved UUID for the admin
         const specialAdminUser = {
-          id: 'admin-special',
+          id: adminUuid,
           email: email,
           role: 'admin',
           app_metadata: { role: 'admin' },
-          user_metadata: { role: 'admin' }
+          user_metadata: { role: 'admin', is_super_admin: true }
         };
         
         // Store in sessionStorage to persist across page refreshes

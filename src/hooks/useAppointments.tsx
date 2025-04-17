@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase, debugAppointments } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,12 +26,21 @@ export function useAppointments() {
       setLoading(true);
       console.log("Fetching appointments for user:", user.id);
       
-      // Get current user's appointments
-      const { data, error } = await supabase
+      // Special case for admin user - can see all appointments
+      const isAdmin = user.app_metadata?.role === 'admin' || user.user_metadata?.is_super_admin;
+      
+      // Query builder
+      let query = supabase
         .from('appointments')
         .select('*')
-        .eq('user_id', user.id)  // Filter to only show current user's appointments
         .order('start_time', { ascending: true });
+      
+      // If not admin, filter to only show current user's appointments
+      if (!isAdmin) {
+        query = query.eq('user_id', user.id);
+      }
+      
+      const { data, error } = await query;
 
       if (error) {
         console.error("Error in initial appointment fetch:", error);
@@ -112,6 +120,11 @@ export function useAppointments() {
     if (!user) return;
 
     console.log("Setting up realtime subscription for appointments");
+    
+    // Special case for admin users - they see all appointments
+    const isAdmin = user.app_metadata?.role === 'admin' || user.user_metadata?.is_super_admin;
+    
+    // Set up subscription with filter for non-admins
     const channel = supabase
       .channel('appointments-changes')
       .on('postgres_changes', 
@@ -119,7 +132,7 @@ export function useAppointments() {
           event: '*', 
           schema: 'public', 
           table: 'appointments',
-          filter: `user_id=eq.${user.id}`  // Filter to only get updates for current user's appointments
+          ...(isAdmin ? {} : { filter: `user_id=eq.${user.id}` }) // Only filter by user_id if not admin
         }, 
         (payload) => {
           console.log("Received realtime update for appointments:", payload);
