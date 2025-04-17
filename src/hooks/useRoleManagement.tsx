@@ -178,102 +178,26 @@ export function useRoleManagement() {
       setLoading(true);
       console.log("Attempting to fetch real user data for admin");
       
-      // First try direct profiles + auth.users approach (most reliable if available)
-      try {
-        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+      // Try to get profiles and roles together
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, created_at')
+        .order('created_at', { ascending: false });
         
-        if (!authError && authUsers && authUsers.users && authUsers.users.length > 0) {
-          console.log("Successfully fetched auth users:", authUsers.users.length);
-          
-          // Get role data to supplement user info
-          const { data: roleData } = await supabase
-            .from('user_roles')
-            .select('*');
-            
-          // Map auth users to our format with roles
-          const mappedUsers = authUsers.users.map(authUser => {
-            // Find role for this user if available
-            const userRole = roleData?.find((r: any) => r.user_id === authUser.id);
-            
-            return {
-              id: authUser.id,
-              email: authUser.email || `user-${authUser.id.substring(0, 8)}@example.com`,
-              role: (userRole?.role as UserRole) || 'user'
-            };
-          });
-          
-          console.log("Mapped real users from auth.users:", mappedUsers.length);
-          setUsersWithEmails(mappedUsers);
-          setUsedDemoData(false);
-          setLoading(false);
-          return;
-        }
-      } catch (authError) {
-        console.error("Error fetching auth users:", authError);
-        // Continue with other approaches
-      }
-      
-      // Next try user_roles + profiles approach
-      const { data: roleData, error: roleError } = await supabase
-        .from('user_roles')
-        .select('*');
+      if (!profileError && profileData && profileData.length > 0) {
+        console.log("Successfully fetched profiles:", profileData.length);
         
-      if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
-        console.log("Got role data:", roleData.length);
-        
-        // Get user profiles
-        const { data: profilesData, error: profilesError } = await supabase
-          .from('profiles')
+        // Get role data to supplement user info
+        const { data: roleData } = await supabase
+          .from('user_roles')
           .select('*');
           
-        if (!profilesError && profilesData && Array.isArray(profilesData)) {
-          console.log("Got profiles data:", profilesData.length);
+        // Map profile data to our format with roles
+        const usersData = profileData.map(profile => {
+          // Find role for this user if available
+          const userRole = roleData?.find((r: any) => r.user_id === profile.id);
           
-          // Map roles to users with emails
-          const usersData = roleData.map((role: any) => {
-            const userProfile = profilesData.find((p: any) => p.id === role.user_id);
-            
-            // Create a meaningful email from available data or use a placeholder
-            let generatedEmail = "";
-            if (userProfile) {
-              // Since the profile doesn't have an email field, construct one from first and last name
-              // or use a fallback pattern based on the user ID
-              generatedEmail = `${userProfile.first_name || ''}${userProfile.last_name ? '.' + userProfile.last_name : ''}@example.com`.toLowerCase();
-              if (generatedEmail === '@example.com') {
-                generatedEmail = `user-${role.user_id.substring(0, 8)}@example.com`;
-              }
-            } else {
-              generatedEmail = `user-${role.user_id.substring(0, 8)}@example.com`;
-            }
-              
-            return {
-              id: role.user_id,
-              email: generatedEmail,
-              role: role.role as UserRole
-            };
-          });
-          
-          console.log("Got real user data from profiles and roles:", usersData.length);
-          setUsersWithEmails(usersData);
-          setUsedDemoData(false);
-          setLoading(false);
-          return;
-        }
-      }
-      
-      // If we couldn't get combined data, try profiles only
-      console.warn("Could not fetch combined user data, trying profiles only");
-      
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*');
-        
-      if (!profilesError && profiles && profiles.length > 0) {
-        console.log("Got profiles only:", profiles.length);
-        
-        // Create users with default user role
-        const usersData = profiles.map((profile: any) => {
-          // Generate email from profile data
+          // Generate email from profile data (since we can't access auth.users)
           const generatedEmail = `${profile.first_name || ''}${profile.last_name ? '.' + profile.last_name : ''}@example.com`.toLowerCase();
           const email = generatedEmail === '@example.com' ? 
             `user-${profile.id.substring(0, 8)}@example.com` : 
@@ -282,20 +206,19 @@ export function useRoleManagement() {
           return {
             id: profile.id,
             email: email,
-            role: 'user' as UserRole
+            role: (userRole?.role as UserRole) || 'user'
           };
         });
         
-        console.log("Created users from profiles:", usersData.length);
+        console.log("Successfully mapped users with roles:", usersData.length);
         setUsersWithEmails(usersData);
         setUsedDemoData(false);
         setLoading(false);
         return;
       }
       
-      // FIX #1: Remove the direct query to auth.users since it's not accessible
-      // Instead of trying to query auth.users directly, let's create sample data
-      console.warn("Could not access user data directly, attempting to create sample data");
+      // If we couldn't fetch data, try to create sample data
+      console.warn("No users found, creating sample data");
       
       // Try to create some sample data if nothing exists
       try {
@@ -374,7 +297,7 @@ export function useRoleManagement() {
       setUsersWithEmails(usersData);
       setUsedDemoData(true);
       
-      // FIX #2: Change 'warning' to 'destructive' since 'warning' is not a valid variant
+      // Using 'destructive' variant since 'warning' is not a valid variant
       toast({
         title: "Using Demo Data",
         description: "Could not fetch real user data from Supabase, using demo data instead.",

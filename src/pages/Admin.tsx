@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; 
 import {
   Table,
   TableBody,
@@ -39,7 +41,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Calendar, Clock, User, Users, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Calendar, Clock, User, Users, RefreshCw, AlertTriangle, Shield } from 'lucide-react';
 
 const AdminPage = () => {
   const { user } = useAuth();
@@ -55,23 +57,38 @@ const AdminPage = () => {
   const [appointmentCount, setAppointmentCount] = useState<number>(0);
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
   const [supabaseAppointments, setSupabaseAppointments] = useState<any[]>([]);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
         setLoading(true);
+        setConnectionError(null);
         console.log("Fetching admin data");
         
-        await ensureAuditLogsExist();
+        try {
+          await ensureAuditLogsExist();
+        } catch (error: any) {
+          console.error('Error ensuring audit logs exist:', error);
+          setConnectionError('Failed to access audit logs. You may need to set up RLS policies.');
+        }
         
         // Force refresh of user data from Supabase
         await fetchUsersWithEmailsAndRoles();
         
-        const count = await getUserCount();
-        setUserCount(count > 0 ? count : usersWithEmails.length);
+        try {
+          const count = await getUserCount();
+          setUserCount(count > 0 ? count : usersWithEmails.length);
+        } catch (error: any) {
+          console.error('Error fetching user count:', error);
+        }
         
-        const users = await getRegisteredUsers();
-        setRegisteredUsers(users);
+        try {
+          const users = await getRegisteredUsers();
+          setRegisteredUsers(users);
+        } catch (error: any) {
+          console.error('Error fetching registered users:', error);
+        }
         
         // Fetch appointments directly from Supabase
         try {
@@ -88,6 +105,10 @@ const AdminPage = () => {
               description: "Failed to fetch appointments from database",
               variant: "destructive",
             });
+            
+            await fetchAppointments();
+            setSupabaseAppointments(appointments);
+            setAppointmentCount(appointments.length);
           } else if (data && data.length > 0) {
             console.log("Successfully fetched appointments directly:", data.length);
             setSupabaseAppointments(data);
@@ -120,16 +141,21 @@ const AdminPage = () => {
         }
         
         try {
-          const { data: logs } = await supabase
+          const { data: logs, error: logsError } = await supabase
             .from('audit_logs')
             .select('*')
             .order('created_at', { ascending: false })
             .limit(50);
             
-          if (logs && logs.length > 0) {
+          if (logsError) {
+            console.error("Error fetching audit logs:", logsError);
+            if (logsError.message.includes('permission denied')) {
+              setConnectionError('Permission denied when accessing audit logs. You may need to fix RLS policies.');
+            }
+          } else if (logs && logs.length > 0) {
             setAuditLogs(logs);
           }
-        } catch (logsError) {
+        } catch (logsError: any) {
           console.error("Error fetching audit logs:", logsError);
         }
         
@@ -139,8 +165,9 @@ const AdminPage = () => {
             description: "Using demo data as real user data could not be fetched from Supabase. Check your connection.",
           });
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error in admin data fetching:", error);
+        setConnectionError(error.message || 'Unknown error when loading admin data');
         toast({
           title: "Error",
           description: "Failed to load admin data. Please try again.",
@@ -164,6 +191,7 @@ const AdminPage = () => {
     });
     
     setLoading(true);
+    setConnectionError(null);
     try {
       // Debug appointments to see what's in the database
       await debugAppointments();
@@ -209,13 +237,15 @@ const AdminPage = () => {
       const predictions = await getAIPredictions();
       setAiPredictions(predictions);
       
-      const { data: logs } = await supabase
+      const { data: logs, error: logsError } = await supabase
         .from('audit_logs')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(50);
         
-      if (logs) {
+      if (logsError) {
+        console.error("Error refreshing audit logs:", logsError);
+      } else if (logs) {
         setAuditLogs(logs);
       }
       
@@ -230,8 +260,9 @@ const AdminPage = () => {
           description: "Still using demo data as real user data could not be fetched from Supabase.",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error refreshing admin data:", error);
+      setConnectionError(error.message || 'Unknown error when refreshing data');
       toast({
         title: "Error",
         description: "Failed to refresh admin data.",
@@ -247,6 +278,18 @@ const AdminPage = () => {
     return new Date(dateString).toLocaleString();
   };
 
+  if (!user) {
+    return (
+      <Layout>
+        <div className="max-w-7xl mx-auto py-12 flex flex-col items-center justify-center">
+          <Shield className="h-16 w-16 text-muted-foreground mb-4" />
+          <h1 className="text-3xl font-bold mb-2">Admin Access Required</h1>
+          <p className="text-muted-foreground mb-6">Please sign in with an admin account to view this page.</p>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="max-w-7xl mx-auto">
@@ -257,6 +300,16 @@ const AdminPage = () => {
             {loading ? "Refreshing..." : "Refresh Data"}
           </Button>
         </div>
+        
+        {connectionError && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Connection Error</AlertTitle>
+            <AlertDescription>
+              {connectionError}. Make sure your Supabase project is properly configured with the correct RLS policies.
+            </AlertDescription>
+          </Alert>
+        )}
         
         {usedDemoData && (
           <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
