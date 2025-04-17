@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useAuth } from '@/hooks/useAuth';
 import { useRoleManagement } from '@/hooks/useRoleManagement';
-import { supabase, getAIPredictionMetrics, getAIPredictions } from '@/integrations/supabase/client';
+import { supabase, getAIPredictionMetrics, getAIPredictions, getUserCount } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import type { AIPredictionMetrics, AIPrediction } from '@/integrations/supabase/client';
@@ -44,7 +44,7 @@ const AdminPage = () => {
   
   // Fetch AI metrics and predictions
   useEffect(() => {
-    const fetchAIData = async () => {
+    const fetchAdminData = async () => {
       try {
         setLoading(true);
         console.log("Fetching admin data");
@@ -52,23 +52,10 @@ const AdminPage = () => {
         // Ensure we have the latest user data
         await fetchUsersWithEmailsAndRoles();
         
-        // Get user count from usersWithEmails or make a direct count query
-        try {
-          const { count, error } = await supabase
-            .from('user_roles')
-            .select('*', { count: 'exact', head: true });
-            
-          if (!error && count !== null) {
-            setUserCount(count);
-            console.log("Fetched user count from user_roles:", count);
-          } else {
-            console.log("Couldn't fetch user count from database, using available users:", usersWithEmails?.length);
-            setUserCount(usersWithEmails?.length || 0);
-          }
-        } catch (error) {
-          console.error("Error counting users:", error);
-          setUserCount(usersWithEmails?.length || 0);
-        }
+        // Get user count directly from database
+        const count = await getUserCount();
+        setUserCount(count);
+        console.log("Fetched user count:", count);
         
         // Fetch appointment count (real data)
         const { count: apptCount, error: apptError } = await supabase
@@ -202,9 +189,9 @@ const AdminPage = () => {
     // Check if we're logged in and have admin access before fetching
     if ((user && isSpecialAdmin) || (user && user.user_metadata?.is_super_admin) || (user && userRole === 'admin')) {
       console.log("Authorized admin access, fetching data");
-      fetchAIData();
+      fetchAdminData();
     }
-  }, [user, userRole, toast, usersWithEmails, isSpecialAdmin, fetchUsersWithEmailsAndRoles]);
+  }, [user, userRole, toast, isSpecialAdmin, fetchUsersWithEmailsAndRoles]);
   
   // Generate data for prediction accuracy chart
   const getPredictionAccuracyData = () => {
@@ -271,6 +258,10 @@ const AdminPage = () => {
       try {
         // Re-fetch users
         await fetchUsersWithEmailsAndRoles();
+        
+        // Get direct user count
+        const count = await getUserCount();
+        setUserCount(count);
         
         // Re-fetch appointment count
         const { count: apptCount, error: apptError } = await supabase
