@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -177,58 +178,22 @@ export function useRoleManagement() {
       setLoading(true);
       console.log("Attempting to fetch real user data for admin");
       
-      // First try to get users via auth.users table through an RPC function
-      // This would be implemented as a Supabase Edge Function in a production app
+      // We can't query the auth.users table directly, so we'll use what we can access
       try {
-        const { data: authUsers, error: authError } = await supabase
-          .from('auth_users_view') // Use a view instead of RPC
-          .select('*');
-          
-        if (!authError && authUsers && Array.isArray(authUsers) && authUsers.length > 0) {
-          console.log("Got real auth users from view:", authUsers.length);
-          
-          // Get roles for these users
-          const { data: roleData, error: roleError } = await supabase
-            .from('user_roles')
-            .select('*');
-            
-          if (!roleError && roleData && Array.isArray(roleData)) {
-            console.log("Got role data:", roleData.length);
-            
-            // Map roles to users
-            const mappedUsers: UserWithEmailAndRole[] = authUsers.map((authUser: any) => {
-              const userRole = roleData.find((r: any) => r.user_id === authUser.id);
-              return {
-                id: authUser.id,
-                email: authUser.email || `user-${authUser.id.substring(0, 8)}@example.com`,
-                role: userRole ? userRole.role as UserRole : 'user'
-              };
-            });
-            
-            console.log("Mapped users with roles:", mappedUsers.length);
-            setUsersWithEmails(mappedUsers);
-            setUsedDemoData(false);
-            setLoading(false);
-            return;
-          }
-        }
-      } catch (rpcError) {
-        console.error("Error accessing user view:", rpcError);
-      }
-      
-      // Fallback to user_roles and profiles
-      try {
+        // Try using user_roles and profiles together
         const { data: roleData, error: roleError } = await supabase
           .from('user_roles')
           .select('*');
           
-        if (!roleError && roleData && roleData.length > 0) {
+        if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
+          console.log("Got role data:", roleData.length);
+          
           // Get user emails - in a real app, you would use a join with user profiles
           const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select('*');
             
-          if (!profilesError && profilesData) {
+          if (!profilesError && profilesData && Array.isArray(profilesData)) {
             // Map roles to users with emails
             const usersData = roleData.map((role: any) => {
               const userProfile = profilesData.find((p: any) => p.id === role.user_id);
