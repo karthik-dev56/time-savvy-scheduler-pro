@@ -9,8 +9,7 @@ import {
   Menu, 
   Home,
   Settings,
-  User,
-  Database
+  User
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -85,12 +84,6 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ isOpen, onClose }) => {
           to="/admin"
           icon={<Settings className="h-5 w-5" />}
           label="Admin"
-        />
-        
-        <SidebarLink
-          to="/supabase-data"
-          icon={<Database className="h-5 w-5" />}
-          label="Supabase Data"
         />
       </nav>
     </aside>
