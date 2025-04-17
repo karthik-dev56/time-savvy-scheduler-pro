@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -11,6 +12,7 @@ import {
   User,
   Database
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface SidebarLinkProps {
   to: string;
