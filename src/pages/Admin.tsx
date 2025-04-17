@@ -26,7 +26,7 @@ import {
 
 const AdminPage = () => {
   const { user } = useAuth();
-  const { hasRole, userRole, usersWithEmails } = useRoleManagement();
+  const { userRole, usersWithEmails } = useRoleManagement();
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -38,42 +38,19 @@ const AdminPage = () => {
   const [userCount, setUserCount] = useState<number>(0);
   const [appointmentCount, setAppointmentCount] = useState<number>(0);
   
-  // Check if user has admin role
-  useEffect(() => {
-    const checkAdminAccess = async () => {
-      if (!user) {
-        navigate('/auth');
-        return;
-      }
-      
-      // Check for special admin session
-      const specialAdminSession = sessionStorage.getItem('specialAdminSession');
-      const isSpecialAdmin = specialAdminSession ? true : false;
-      
-      // Regular role check
-      const isAdmin = hasRole('admin');
-      
-      if (!isAdmin && !isSpecialAdmin && !user.user_metadata?.is_super_admin) {
-        toast({
-          title: "Access Denied",
-          description: "You do not have permission to access the admin page.",
-          variant: "destructive",
-        });
-        navigate('/');
-      }
-    };
-    
-    checkAdminAccess();
-  }, [user, hasRole, navigate, toast]);
+  // Check if we have a special admin session
+  const specialAdminSession = sessionStorage.getItem('specialAdminSession');
+  const isSpecialAdmin = specialAdminSession ? Boolean(JSON.parse(specialAdminSession)?.user_metadata?.is_super_admin) : false;
   
   // Fetch AI metrics and predictions
   useEffect(() => {
     const fetchAIData = async () => {
       try {
         setLoading(true);
+        console.log("Fetching admin data");
         
         // Get user count from actual user data
-        setUserCount(usersWithEmails.length || 152); // Fallback to 152 if no real data
+        setUserCount(usersWithEmails?.length || 152); // Fallback to 152 if no real data
         
         // Fetch appointment count (real data)
         const { count: apptCount, error: apptError } = await supabase
@@ -121,10 +98,12 @@ const AdminPage = () => {
       }
     };
     
-    if (user && (userRole === 'admin' || user.user_metadata?.is_super_admin)) {
+    // Check if we're logged in and have admin access before fetching
+    if ((user && isSpecialAdmin) || (user && user.user_metadata?.is_super_admin) || (user && userRole === 'admin')) {
+      console.log("Authorized admin access, fetching data");
       fetchAIData();
     }
-  }, [user, userRole, toast, usersWithEmails]);
+  }, [user, userRole, toast, usersWithEmails, isSpecialAdmin]);
   
   // Generate data for prediction accuracy chart
   const getPredictionAccuracyData = () => {

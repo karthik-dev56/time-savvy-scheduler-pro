@@ -21,7 +21,12 @@ const UserMenu = () => {
   const { userRole, loading: roleLoading } = useRoleManagement();
   const navigate = useNavigate();
   
-  const isSpecialAdmin = user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin');
+  // Check for special admin session
+  const specialAdminSession = sessionStorage.getItem('specialAdminSession');
+  const isSpecialAdmin = specialAdminSession ? Boolean(JSON.parse(specialAdminSession)?.user_metadata?.is_super_admin) : false;
+  
+  // Consistent admin check
+  const isAdminUser = isSpecialAdmin || user?.user_metadata?.is_super_admin || (user?.app_metadata && user.app_metadata.role === 'admin');
 
   const handleSignOut = async () => {
     await signOut();
@@ -41,7 +46,7 @@ const UserMenu = () => {
     : 'U';
 
   const getRoleBadgeColor = () => {
-    if (isSpecialAdmin) return 'bg-red-100 text-red-800 border-red-200';
+    if (isAdminUser) return 'bg-red-100 text-red-800 border-red-200';
     
     switch (userRole) {
       case 'admin': return 'bg-red-100 text-red-800 border-red-200';
@@ -67,10 +72,10 @@ const UserMenu = () => {
             <p className="text-xs leading-none text-muted-foreground">
               {user.email}
             </p>
-            {(isSpecialAdmin || (userRole && !roleLoading)) && (
+            {(isAdminUser || (userRole && !roleLoading)) && (
               <div className="mt-2">
                 <Badge variant="outline" className={`${getRoleBadgeColor()} flex items-center gap-1`}>
-                  <ShieldCheck className="h-3 w-3" /> {isSpecialAdmin ? 'admin' : userRole}
+                  <ShieldCheck className="h-3 w-3" /> {isAdminUser ? 'admin' : userRole}
                 </Badge>
               </div>
             )}
@@ -81,7 +86,7 @@ const UserMenu = () => {
           <User className="mr-2 h-4 w-4" />
           <span>Profile</span>
         </DropdownMenuItem>
-        {(isSpecialAdmin || userRole === 'admin' || userRole === 'manager') && (
+        {(isAdminUser || userRole === 'admin' || userRole === 'manager') && (
           <DropdownMenuItem onClick={() => navigate('/admin')}>
             <ShieldCheck className="mr-2 h-4 w-4" />
             <span>Admin Panel</span>

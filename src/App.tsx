@@ -28,7 +28,7 @@ const ProtectedRoute = ({ children, requiredRole }: { children: React.ReactNode,
   
   // Special admin check for admin credentials stored in sessionStorage
   const specialAdminSession = sessionStorage.getItem('specialAdminSession');
-  if (specialAdminSession) {
+  if (requiredRole === 'admin' && specialAdminSession) {
     try {
       const adminUser = JSON.parse(specialAdminSession);
       if (adminUser && adminUser.user_metadata?.is_super_admin) {
@@ -39,13 +39,20 @@ const ProtectedRoute = ({ children, requiredRole }: { children: React.ReactNode,
     }
   }
   
-  // If we don't need a specific role or user has admin privileges
-  if (!requiredRole || user.user_metadata?.is_super_admin || user.app_metadata?.role === 'admin') {
-    return <>{children}</>;
+  // If we're requiring admin role, check for admin privileges
+  if (requiredRole === 'admin') {
+    // If user has admin privileges in user_metadata or app_metadata
+    if (user.user_metadata?.is_super_admin || user.app_metadata?.role === 'admin') {
+      return <>{children}</>;
+    } else {
+      // Not admin, redirect to home
+      console.log("User not admin, redirecting to home");
+      return <Navigate to="/" replace />;
+    }
   }
   
-  // If we get here, the user doesn't have the required role
-  return <Navigate to="/" replace />;
+  // For non-admin protected routes
+  return <>{children}</>;
 };
 
 const App = () => (

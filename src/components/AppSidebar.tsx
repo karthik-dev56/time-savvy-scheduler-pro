@@ -23,7 +23,12 @@ const AppSidebar = () => {
   const { user } = useAuth();
   const { userRole, isAdminOrManager } = useRoleManagement();
   
-  const isSpecialAdmin = user?.id === 'admin-special' || (user?.app_metadata && user.app_metadata.role === 'admin');
+  // Check for special admin session
+  const specialAdminSession = sessionStorage.getItem('specialAdminSession');
+  const isSpecialAdmin = specialAdminSession ? Boolean(JSON.parse(specialAdminSession)?.user_metadata?.is_super_admin) : false;
+  
+  // Also check user object directly 
+  const isAdminUser = user?.user_metadata?.is_super_admin || (user?.app_metadata && user.app_metadata.role === 'admin') || isSpecialAdmin;
   
   const menuItems = [
     { title: "Dashboard", icon: Home, url: "/" },
@@ -84,7 +89,7 @@ const AppSidebar = () => {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 
-                {isAdminOrManager() || isSpecialAdmin ? (
+                {isAdminOrManager() || isAdminUser ? (
                   <SidebarMenuItem>
                     <SidebarMenuButton 
                       asChild 
@@ -93,7 +98,7 @@ const AppSidebar = () => {
                       <Link to="/admin" className="flex items-center gap-3">
                         <ShieldCheck size={18} />
                         <span>Admin Panel</span>
-                        {(isSpecialAdmin || userRole === 'admin') && (
+                        {(isAdminUser || userRole === 'admin') && (
                           <Badge variant="outline" className="ml-auto text-xs bg-red-50 text-red-700 border-red-200">
                             Admin
                           </Badge>
@@ -117,7 +122,7 @@ const AppSidebar = () => {
               {user ? (user.email?.split('@')[0] || 'User') : 'Guest'}
             </p>
             <p className="text-xs text-sidebar-foreground/70">
-              {isSpecialAdmin ? 'admin account' : (userRole ? `${userRole} account` : (user ? user.email : 'Not signed in'))}
+              {isAdminUser ? 'admin account' : (userRole ? `${userRole} account` : (user ? user.email : 'Not signed in'))}
             </p>
           </div>
         </div>
