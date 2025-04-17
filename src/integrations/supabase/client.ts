@@ -314,14 +314,16 @@ export const getUserCount = async (): Promise<number> => {
     console.log("No users found, creating sample users");
     
     try {
-      // Create a sample user role
+      // Create sample user roles with required user_id field
+      const sampleUsers = [
+        { id: crypto.randomUUID(), user_id: crypto.randomUUID(), role: 'admin' as const },
+        { id: crypto.randomUUID(), user_id: crypto.randomUUID(), role: 'user' as const },
+        { id: crypto.randomUUID(), user_id: crypto.randomUUID(), role: 'manager' as const }
+      ];
+      
       const { data: sampleRole, error: roleError } = await supabase
         .from('user_roles')
-        .insert([
-          { role: 'admin' },
-          { role: 'user' },
-          { role: 'manager' }
-        ])
+        .insert(sampleUsers)
         .select();
         
       if (!roleError && sampleRole && sampleRole.length > 0) {
@@ -393,11 +395,11 @@ export const getRegisteredUsers = async () => {
     console.log("No real users found, creating sample users");
     
     try {
-      // Try to create sample profiles
+      // Try to create sample profiles with required ID field
       const sampleProfiles = [
-        { first_name: 'Admin', last_name: 'User' },
-        { first_name: 'John', last_name: 'Doe' },
-        { first_name: 'Jane', last_name: 'Smith' }
+        { id: crypto.randomUUID(), first_name: 'Admin', last_name: 'User' },
+        { id: crypto.randomUUID(), first_name: 'John', last_name: 'Doe' },
+        { id: crypto.randomUUID(), first_name: 'Jane', last_name: 'Smith' }
       ];
       
       const { data: newProfiles, error: createProfilesError } = await supabase
@@ -408,10 +410,10 @@ export const getRegisteredUsers = async () => {
       if (!createProfilesError && newProfiles && newProfiles.length > 0) {
         console.log("Created sample profiles:", newProfiles.length);
         
-        // Create roles for these profiles
+        // Create roles for these profiles with proper type
         const roleInserts = newProfiles.map((profile, index) => ({
           user_id: profile.id,
-          role: index === 0 ? 'admin' : (index === 1 ? 'manager' : 'user')
+          role: (index === 0 ? 'admin' : (index === 1 ? 'manager' : 'user')) as const
         }));
         
         const { data: newRoles } = await supabase

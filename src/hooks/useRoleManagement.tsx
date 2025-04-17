@@ -261,11 +261,11 @@ export function useRoleManagement() {
       try {
         console.log("No users found in database, creating sample data");
         
-        // Create sample profiles
+        // Create sample profiles with random IDs (important for TypeScript compatibility)
         const sampleProfiles = [
-          { first_name: 'Admin', last_name: 'User' },
-          { first_name: 'Manager', last_name: 'User' },
-          { first_name: 'Regular', last_name: 'User' }
+          { id: crypto.randomUUID(), first_name: 'Admin', last_name: 'User' },
+          { id: crypto.randomUUID(), first_name: 'Manager', last_name: 'User' },
+          { id: crypto.randomUUID(), first_name: 'Regular', last_name: 'User' }
         ];
         
         const { data: newProfiles, error: createError } = await supabase
@@ -276,10 +276,10 @@ export function useRoleManagement() {
         if (!createError && newProfiles && newProfiles.length > 0) {
           console.log("Created sample profiles:", newProfiles.length);
           
-          // Create roles for these profiles
+          // Create roles for these profiles with proper UserRole type
           const roleInserts = newProfiles.map((profile, index) => ({
             user_id: profile.id,
-            role: index === 0 ? 'admin' : (index === 1 ? 'manager' : 'user')
+            role: (index === 0 ? 'admin' : (index === 1 ? 'manager' : 'user')) as UserRole
           }));
           
           const { data: newRoles } = await supabase
@@ -292,7 +292,7 @@ export function useRoleManagement() {
             const userData = newProfiles.map((profile, index) => ({
               id: profile.id,
               email: `${profile.first_name.toLowerCase()}.${profile.last_name.toLowerCase()}@example.com`,
-              role: index === 0 ? 'admin' as UserRole : (index === 1 ? 'manager' as UserRole : 'user' as UserRole)
+              role: (index === 0 ? 'admin' as UserRole : (index === 1 ? 'manager' as UserRole : 'user' as UserRole))
             }));
             
             console.log("Created sample users with roles:", userData.length);
@@ -317,7 +317,7 @@ export function useRoleManagement() {
         usersData.push({
           id: user.id,
           email: user.email,
-          role: 'admin'
+          role: 'admin' as UserRole
         });
       }
       
@@ -326,7 +326,7 @@ export function useRoleManagement() {
         usersData.push({
           id: '00000000-0000-0000-0000-000000000000', // Special admin UUID
           email: 'k8716610@gmail.com',
-          role: 'admin'
+          role: 'admin' as UserRole
         });
       }
       
