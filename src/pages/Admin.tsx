@@ -5,7 +5,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useAuth } from '@/hooks/useAuth';
 import { useRoleManagement } from '@/hooks/useRoleManagement';
-import { supabase, getAIPredictionMetrics, getAIPredictions, getUserCount } from '@/integrations/supabase/client';
+import { 
+  supabase, 
+  getAIPredictionMetrics, 
+  getAIPredictions, 
+  getUserCount, 
+  getRegisteredUsers, 
+  getDetailedAppointments 
+} from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import type { AIPredictionMetrics, AIPrediction } from '@/integrations/supabase/client';
@@ -37,12 +44,14 @@ const AdminPage = () => {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [userCount, setUserCount] = useState<number>(0);
   const [appointmentCount, setAppointmentCount] = useState<number>(0);
+  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+  const [detailedAppointments, setDetailedAppointments] = useState<any[]>([]);
   
   // Check if we have a special admin session
   const specialAdminSession = sessionStorage.getItem('specialAdminSession');
   const isSpecialAdmin = specialAdminSession ? Boolean(JSON.parse(specialAdminSession)?.user_metadata?.is_super_admin) : false;
   
-  // Fetch AI metrics and predictions
+  // Fetch admin data including user registrations and appointments
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
@@ -52,12 +61,17 @@ const AdminPage = () => {
         // Ensure we have the latest user data
         await fetchUsersWithEmailsAndRoles();
         
-        // Get user count directly from database
+        // Get user count and detailed users
         const count = await getUserCount();
         setUserCount(count);
         console.log("Fetched user count:", count);
         
-        // Fetch appointment count (real data)
+        // Get detailed registered users
+        const users = await getRegisteredUsers();
+        setRegisteredUsers(users);
+        console.log("Fetched registered users:", users.length);
+        
+        // Fetch appointment count and detailed appointments
         const { count: apptCount, error: apptError } = await supabase
           .from('appointments')
           .select('*', { count: 'exact', head: true });
@@ -67,8 +81,13 @@ const AdminPage = () => {
           console.log("Fetched real appointment count:", apptCount);
         } else {
           console.error("Error fetching appointment count:", apptError);
-          setAppointmentCount(0); // Default to 0 instead of fallback demo number
+          setAppointmentCount(0);
         }
+        
+        // Get detailed appointments
+        const appointments = await getDetailedAppointments();
+        setDetailedAppointments(appointments);
+        console.log("Fetched detailed appointments:", appointments.length);
         
         // Fetch AI metrics - use real data only
         const { data: metricsData, error: metricsError } = await supabase
@@ -246,6 +265,12 @@ const AdminPage = () => {
   // Chart colors
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
   
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleString();
+  };
+  
   // Function to refresh admin data
   const refreshAdminData = async () => {
     toast({
@@ -259,11 +284,14 @@ const AdminPage = () => {
         // Re-fetch users
         await fetchUsersWithEmailsAndRoles();
         
-        // Get direct user count
+        // Get direct user count and registered users
         const count = await getUserCount();
         setUserCount(count);
         
-        // Re-fetch appointment count
+        const users = await getRegisteredUsers();
+        setRegisteredUsers(users);
+        
+        // Re-fetch appointment count and detailed appointments
         const { count: apptCount, error: apptError } = await supabase
           .from('appointments')
           .select('*', { count: 'exact', head: true });
@@ -271,6 +299,9 @@ const AdminPage = () => {
         if (!apptError && apptCount !== null) {
           setAppointmentCount(apptCount);
         }
+        
+        const appointments = await getDetailedAppointments();
+        setDetailedAppointments(appointments);
         
         // Re-fetch AI metrics and predictions
         const { data: metrics } = await supabase
@@ -333,6 +364,8 @@ const AdminPage = () => {
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="users">Registered Users</TabsTrigger>
+            <TabsTrigger value="appointments">Appointments</TabsTrigger>
             <TabsTrigger value="ai-metrics">AI Metrics</TabsTrigger>
             <TabsTrigger value="audit-logs">Audit Logs</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -347,7 +380,7 @@ const AdminPage = () => {
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-bold">{userCount}</p>
-                  <p className="text-xs text-muted-foreground">Based on current system users</p>
+                  <p className="text-xs text-muted-foreground">Registered users in system</p>
                 </CardContent>
               </Card>
               
@@ -377,6 +410,79 @@ const AdminPage = () => {
               </Card>
             </div>
             
+            {/* Recent overview data */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent User Registrations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64 overflow-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-left text-xs font-medium text-muted-foreground">
+                          <th className="pb-2">User ID</th>
+                          <th className="pb-2">Name</th>
+                          <th className="pb-2">Registered</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {registeredUsers.slice(0, 5).map(user => (
+                          <tr key={user.id} className="text-sm border-b border-border last:border-0">
+                            <td className="py-2">{(user.id || "").substring(0, 8)}...</td>
+                            <td className="py-2">{user.first_name || ""} {user.last_name || ""}</td>
+                            <td className="py-2">{formatDate(user.created_at)}</td>
+                          </tr>
+                        ))}
+                        {registeredUsers.length === 0 && (
+                          <tr className="text-sm">
+                            <td colSpan={3} className="py-2 text-center">No registered users found</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Appointments</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64 overflow-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-left text-xs font-medium text-muted-foreground">
+                          <th className="pb-2">Title</th>
+                          <th className="pb-2">Date/Time</th>
+                          <th className="pb-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailedAppointments.slice(0, 5).map(appointment => (
+                          <tr key={appointment.id} className="text-sm border-b border-border last:border-0">
+                            <td className="py-2">{appointment.title}</td>
+                            <td className="py-2">{formatDate(appointment.start_time)}</td>
+                            <td className="py-2">
+                              <span className="px-2 py-1 rounded-md text-xs bg-green-100 text-green-800">
+                                Active
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {detailedAppointments.length === 0 && (
+                          <tr className="text-sm">
+                            <td colSpan={3} className="py-2 text-center">No appointments found</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            
             {/* AI Predictions Overview Chart */}
             <Card className="mt-6">
               <CardHeader>
@@ -401,6 +507,94 @@ const AdminPage = () => {
                       />
                     </AreaChart>
                   </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="users">
+            <Card>
+              <CardHeader>
+                <CardTitle>Registered Users</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[500px] overflow-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left text-xs font-medium text-muted-foreground">
+                        <th className="pb-2">User ID</th>
+                        <th className="pb-2">Name</th>
+                        <th className="pb-2">Role</th>
+                        <th className="pb-2">Registration Date</th>
+                        <th className="pb-2">Last Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {registeredUsers.map(user => (
+                        <tr key={user.id} className="text-sm border-b border-border last:border-0">
+                          <td className="py-2">{(user.id || "").substring(0, 8)}...</td>
+                          <td className="py-2">{user.first_name || ""} {user.last_name || ""}</td>
+                          <td className="py-2">{user.user_roles?.role || "user"}</td>
+                          <td className="py-2">{formatDate(user.created_at)}</td>
+                          <td className="py-2">{formatDate(user.updated_at)}</td>
+                        </tr>
+                      ))}
+                      {registeredUsers.length === 0 && (
+                        <tr className="text-sm">
+                          <td colSpan={5} className="py-2 text-center">No registered users found</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="appointments">
+            <Card>
+              <CardHeader>
+                <CardTitle>All Appointments</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[500px] overflow-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left text-xs font-medium text-muted-foreground">
+                        <th className="pb-2">Title</th>
+                        <th className="pb-2">User ID</th>
+                        <th className="pb-2">Start Time</th>
+                        <th className="pb-2">End Time</th>
+                        <th className="pb-2">Priority</th>
+                        <th className="pb-2">Created</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailedAppointments.map(appointment => (
+                        <tr key={appointment.id} className="text-sm border-b border-border last:border-0">
+                          <td className="py-2">{appointment.title}</td>
+                          <td className="py-2">{(appointment.user_id || "").substring(0, 8)}...</td>
+                          <td className="py-2">{formatDate(appointment.start_time)}</td>
+                          <td className="py-2">{formatDate(appointment.end_time)}</td>
+                          <td className="py-2">
+                            <span className={`px-2 py-1 rounded-md text-xs ${
+                              appointment.priority === 'high' ? 'bg-red-100 text-red-800' :
+                              appointment.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {appointment.priority}
+                            </span>
+                          </td>
+                          <td className="py-2">{formatDate(appointment.created_at)}</td>
+                        </tr>
+                      ))}
+                      {detailedAppointments.length === 0 && (
+                        <tr className="text-sm">
+                          <td colSpan={6} className="py-2 text-center">No appointments found</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </CardContent>
             </Card>

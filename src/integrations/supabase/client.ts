@@ -282,20 +282,12 @@ export const debugAppointments = async () => {
   }
 };
 
-// Helper function to get user count from database
+// Helper function to get user count from database - improved with better error handling
 export const getUserCount = async (): Promise<number> => {
   try {
-    // First try to count user_roles
-    const { count, error } = await supabase
-      .from('user_roles')
-      .select('*', { count: 'exact', head: true });
-      
-    if (!error && count !== null) {
-      console.log("Got user count from user_roles:", count);
-      return count;
-    }
+    console.log("Fetching user count from database...");
     
-    // If that fails, try profiles
+    // First try to count auth.users directly through profiles (most reliable method)
     const { count: profileCount, error: profileError } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true });
@@ -305,10 +297,60 @@ export const getUserCount = async (): Promise<number> => {
       return profileCount;
     }
     
+    // If profiles fails, try user_roles
+    const { count, error } = await supabase
+      .from('user_roles')
+      .select('*', { count: 'exact', head: true });
+      
+    if (!error && count !== null) {
+      console.log("Got user count from user_roles:", count);
+      return count;
+    }
+    
     console.error("Failed to get user count from database");
     return 0;
   } catch (error) {
     console.error("Error getting user count:", error);
     return 0;
+  }
+};
+
+// New function to get detailed user registration data
+export const getRegisteredUsers = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*, user_roles!inner(*)')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error("Error fetching registered users:", error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error("Error in getRegisteredUsers:", error);
+    return [];
+  }
+};
+
+// New function to get detailed appointment data
+export const getDetailedAppointments = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error("Error fetching detailed appointments:", error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error("Error in getDetailedAppointments:", error);
+    return [];
   }
 };
