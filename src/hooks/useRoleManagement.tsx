@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -182,17 +181,18 @@ export function useRoleManagement() {
       // This would be implemented as a Supabase Edge Function in a production app
       try {
         const { data: authUsers, error: authError } = await supabase
-          .rpc('get_auth_users');
+          .from('auth_users_view') // Use a view instead of RPC
+          .select('*');
           
-        if (!authError && authUsers && authUsers.length > 0) {
-          console.log("Got real auth users from RPC:", authUsers.length);
+        if (!authError && authUsers && Array.isArray(authUsers) && authUsers.length > 0) {
+          console.log("Got real auth users from view:", authUsers.length);
           
           // Get roles for these users
           const { data: roleData, error: roleError } = await supabase
             .from('user_roles')
             .select('*');
             
-          if (!roleError && roleData) {
+          if (!roleError && roleData && Array.isArray(roleData)) {
             console.log("Got role data:", roleData.length);
             
             // Map roles to users
@@ -213,7 +213,7 @@ export function useRoleManagement() {
           }
         }
       } catch (rpcError) {
-        console.error("Error calling RPC function:", rpcError);
+        console.error("Error accessing user view:", rpcError);
       }
       
       // Fallback to user_roles and profiles

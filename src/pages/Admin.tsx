@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,16 +52,21 @@ const AdminPage = () => {
         // Ensure we have the latest user data
         await fetchUsersWithEmailsAndRoles();
         
-        // Get user count from actual user data - try to fetch from auth.users if possible via a function
-        const { count: userCountResult, error: userCountError } = await supabase
-          .rpc('get_user_count')
-          .select('count')
-          .single();
-          
-        if (!userCountError && userCountResult) {
-          setUserCount(userCountResult.count);
-        } else {
-          console.log("Couldn't fetch user count from rpc, using available users:", usersWithEmails?.length);
+        // Get user count from usersWithEmails or make a direct count query
+        try {
+          const { count, error } = await supabase
+            .from('user_roles')
+            .select('*', { count: 'exact', head: true });
+            
+          if (!error && count !== null) {
+            setUserCount(count);
+            console.log("Fetched user count from user_roles:", count);
+          } else {
+            console.log("Couldn't fetch user count from database, using available users:", usersWithEmails?.length);
+            setUserCount(usersWithEmails?.length || 0);
+          }
+        } catch (error) {
+          console.error("Error counting users:", error);
           setUserCount(usersWithEmails?.length || 0);
         }
         
