@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -292,29 +293,9 @@ export function useRoleManagement() {
         return;
       }
       
-      // Try direct query to auth.users as a last resort (might work in certain permissions)
-      try {
-        const { data: directUsers, error: directError } = await supabase
-          .from('auth.users')
-          .select('id,email,created_at');
-          
-        if (!directError && directUsers && directUsers.length > 0) {
-          console.log("Successfully got users directly:", directUsers.length);
-          
-          const usersData = directUsers.map((user: any) => ({
-            id: user.id,
-            email: user.email || `user-${user.id.substring(0, 8)}@example.com`,
-            role: 'user' as UserRole
-          }));
-          
-          setUsersWithEmails(usersData);
-          setUsedDemoData(false);
-          setLoading(false);
-          return;
-        }
-      } catch (directError) {
-        console.error("Error with direct auth.users query:", directError);
-      }
+      // FIX #1: Remove the direct query to auth.users since it's not accessible
+      // Instead of trying to query auth.users directly, let's create sample data
+      console.warn("Could not access user data directly, attempting to create sample data");
       
       // Try to create some sample data if nothing exists
       try {
@@ -392,10 +373,12 @@ export function useRoleManagement() {
       console.log("Using demo users with emails and roles:", usersData);
       setUsersWithEmails(usersData);
       setUsedDemoData(true);
+      
+      // FIX #2: Change 'warning' to 'destructive' since 'warning' is not a valid variant
       toast({
         title: "Using Demo Data",
         description: "Could not fetch real user data from Supabase, using demo data instead.",
-        variant: "warning",
+        variant: "destructive",
       });
     } catch (error: any) {
       console.error('Error fetching users with emails:', error);
