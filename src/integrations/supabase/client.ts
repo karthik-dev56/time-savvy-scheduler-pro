@@ -310,21 +310,7 @@ export const getUserCount = async (): Promise<number> => {
       return profileCount;
     }
     
-    // If profiles fails, try auth users directly (may not work due to permissions)
-    try {
-      const { count: authCount, error: authError } = await supabase
-        .from('auth.users')
-        .select('*', { count: 'exact', head: true });
-        
-      if (!authError && authCount !== null) {
-        console.log("Got user count from auth.users:", authCount);
-        return authCount;
-      }
-    } catch (authCatchError) {
-      console.log("Expected error trying to access auth.users directly:", authCatchError);
-    }
-    
-    // If everything fails, use a fallback
+    // If profiles fails, we can't directly access auth.users, so use a fallback
     console.log("Using fallback user count");
     return 5; // Return a reasonable fallback number
   } catch (error) {
