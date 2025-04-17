@@ -200,13 +200,11 @@ export function useRoleManagement() {
             // Create a meaningful email from available data or use a placeholder
             let email = "";
             if (userProfile) {
-              if (userProfile.email) {
-                email = userProfile.email;
-              } else {
-                email = `${userProfile.first_name || ''}${userProfile.last_name ? '.' + userProfile.last_name : ''}@example.com`.toLowerCase();
-                if (email === '@example.com') {
-                  email = `user-${role.user_id.substring(0, 8)}@example.com`;
-                }
+              // Since the profile doesn't have an email field, construct one from first and last name
+              // or use a fallback pattern based on the user ID
+              email = `${userProfile.first_name || ''}${userProfile.last_name ? '.' + userProfile.last_name : ''}@example.com`.toLowerCase();
+              if (email === '@example.com') {
+                email = `user-${role.user_id.substring(0, 8)}@example.com`;
               }
             } else {
               email = `user-${role.user_id.substring(0, 8)}@example.com`;
