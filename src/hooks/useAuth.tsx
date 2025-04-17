@@ -16,6 +16,13 @@ export function useAuth() {
       try {
         const adminUser = JSON.parse(specialAdminSession);
         setUser(adminUser as any);
+        setSession({
+          access_token: 'admin-token',
+          refresh_token: 'admin-refresh',
+          user: adminUser as any,
+          expires_at: Date.now() + 3600,
+          expires_in: 3600
+        } as any);
         setLoading(false);
         return; // Exit early if special admin session exists
       } catch (error) {
@@ -64,11 +71,9 @@ export function useAuth() {
       if (email === "k8716610@gmail.com" && password === "9848+-ab") {
         console.log("Special admin login detected");
         
-        // Create a special admin session object with a valid UUID format
-        // This will prevent database errors when querying with this ID
-        const adminUuid = '00000000-0000-0000-0000-000000000000'; // Use a reserved UUID for the admin
-        const specialAdminUser = {
-          id: adminUuid,
+        // Create a proper admin user object with valid format
+        const adminUser = {
+          id: "00000000-0000-0000-0000-000000000000", // Use a valid UUID format
           email: email,
           role: 'admin',
           app_metadata: { role: 'admin' },
@@ -76,12 +81,23 @@ export function useAuth() {
         };
         
         // Store in sessionStorage to persist across page refreshes
-        sessionStorage.setItem('specialAdminSession', JSON.stringify(specialAdminUser));
+        sessionStorage.setItem('specialAdminSession', JSON.stringify(adminUser));
         
         // Set the user in state
-        setUser(specialAdminUser as any);
+        setUser(adminUser as any);
         
-        return { success: true, data: { user: specialAdminUser } };
+        // Create a mock session object
+        const mockSession = {
+          access_token: 'admin-token',
+          refresh_token: 'admin-refresh',
+          user: adminUser,
+          expires_at: Date.now() + 3600,
+          expires_in: 3600
+        };
+        
+        setSession(mockSession as any);
+        
+        return { success: true, data: { user: adminUser, session: mockSession } };
       }
       
       const { data, error } = await supabase.auth.signInWithPassword({

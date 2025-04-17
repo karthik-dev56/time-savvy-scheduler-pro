@@ -15,7 +15,7 @@ import {
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  Tooltip, 
+  Tooltip as RechartsTooltip, 
   ResponsiveContainer,
   BarChart,
   Bar,
@@ -275,7 +275,7 @@ const AdminPage = () => {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" />
                       <YAxis />
-                      <Tooltip />
+                      <RechartsTooltip />
                       <Area 
                         type="monotone" 
                         dataKey="accuracy" 
@@ -356,7 +356,7 @@ const AdminPage = () => {
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip />
+                        <RechartsTooltip />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -411,7 +411,7 @@ const AdminPage = () => {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" />
                         <YAxis domain={[0, 100]} />
-                        <Tooltip />
+                        <RechartsTooltip />
                         <Bar dataKey="accuracy" fill="#8884d8" />
                       </BarChart>
                     </ResponsiveContainer>
