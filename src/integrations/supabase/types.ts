@@ -74,6 +74,7 @@ export type Database = {
           id: string
           is_multi_person: boolean
           priority: string
+          reminder_email: string | null
           start_time: string
           title: string
           updated_at: string | null
@@ -86,6 +87,7 @@ export type Database = {
           id?: string
           is_multi_person?: boolean
           priority?: string
+          reminder_email?: string | null
           start_time: string
           title: string
           updated_at?: string | null
@@ -98,6 +100,7 @@ export type Database = {
           id?: string
           is_multi_person?: boolean
           priority?: string
+          reminder_email?: string | null
           start_time?: string
           title?: string
           updated_at?: string | null

@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { X, Plus, UserPlus } from 'lucide-react';
+import { X, Plus, UserPlus, Mail } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Appointment } from '@/types/database.types';
 import { sendAppointmentNotification } from '@/utils/notificationUtils';
@@ -37,6 +37,7 @@ const NewAppointment = ({
     endTime: '',
     priority: 'normal',
     isMultiPerson: false,
+    reminderEmail: '',
   });
   const [participants, setParticipants] = useState<{email: string, id?: string}[]>([]);
   const [newParticipantEmail, setNewParticipantEmail] = useState('');
@@ -151,6 +152,15 @@ const NewAppointment = ({
       return;
     }
 
+    if (formData.reminderEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.reminderEmail)) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address for reminders",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -168,7 +178,8 @@ const NewAppointment = ({
         start_time: startDateTime,
         end_time: endDateTime,
         priority: formData.priority,
-        is_multi_person: formData.isMultiPerson
+        is_multi_person: formData.isMultiPerson,
+        reminder_email: formData.reminderEmail || null
       };
 
       const { data: appointmentData, error: appointmentError } = await supabase
@@ -222,6 +233,7 @@ const NewAppointment = ({
         endTime: '',
         priority: 'normal',
         isMultiPerson: false,
+        reminderEmail: '',
       });
       setParticipants([]);
     } catch (error: any) {
@@ -362,6 +374,25 @@ const NewAppointment = ({
               )}
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="reminderEmail">Reminder Email</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                id="reminderEmail"
+                name="reminderEmail"
+                type="email"
+                value={formData.reminderEmail}
+                onChange={handleInputChange}
+                placeholder="Enter email for appointment reminders"
+                className="pl-10"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Optional: Enter an email to receive reminder notifications for this appointment.
+            </p>
+          </div>
 
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Creating..." : "Create Appointment"}
