@@ -443,9 +443,9 @@ export const getUserCount = async (): Promise<number> => {
     try {
       // Create sample user roles with required user_id field
       const sampleUsers = [
-        { id: crypto.randomUUID(), user_id: crypto.randomUUID(), role: 'admin' },
-        { id: crypto.randomUUID(), user_id: crypto.randomUUID(), role: 'user' },
-        { id: crypto.randomUUID(), user_id: crypto.randomUUID(), role: 'manager' }
+        { user_id: crypto.randomUUID(), role: 'admin' as 'admin' | 'manager' | 'user' },
+        { user_id: crypto.randomUUID(), role: 'user' as 'admin' | 'manager' | 'user' },
+        { user_id: crypto.randomUUID(), role: 'manager' as 'admin' | 'manager' | 'user' }
       ];
       
       const { data: sampleRole, error: roleError } = await supabase
@@ -600,3 +600,4 @@ export const ensureAuditLogsExist = async () => {
     console.error("Error in ensureAuditLogsExist:", error);
   }
 };
+
