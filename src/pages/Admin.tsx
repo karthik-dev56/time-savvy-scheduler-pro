@@ -39,11 +39,11 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Calendar, Clock, User, Users } from 'lucide-react';
+import { Calendar, Clock, User, Users, RefreshCw, AlertTriangle } from 'lucide-react';
 
 const AdminPage = () => {
   const { user } = useAuth();
-  const { userRole, fetchUsersWithEmailsAndRoles, usersWithEmails } = useRoleManagement();
+  const { userRole, fetchUsersWithEmailsAndRoles, usersWithEmails, usedDemoData } = useRoleManagement();
   const { appointments, fetchAppointments } = useAppointments();
   const { toast } = useToast();
   
@@ -63,6 +63,8 @@ const AdminPage = () => {
         console.log("Fetching admin data");
         
         await ensureAuditLogsExist();
+        
+        // Force refresh of user data from Supabase
         await fetchUsersWithEmailsAndRoles();
         
         const count = await getUserCount();
@@ -130,6 +132,13 @@ const AdminPage = () => {
         } catch (logsError) {
           console.error("Error fetching audit logs:", logsError);
         }
+        
+        if (usedDemoData) {
+          toast({
+            title: "Notice",
+            description: "Using demo data as real user data could not be fetched from Supabase. Check your connection.",
+          });
+        }
       } catch (error) {
         console.error("Error in admin data fetching:", error);
         toast({
@@ -158,6 +167,9 @@ const AdminPage = () => {
     try {
       // Debug appointments to see what's in the database
       await debugAppointments();
+      
+      // Force refresh users from Supabase
+      await fetchUsersWithEmailsAndRoles();
       
       // Make sure we fetch all appointments first
       await fetchAppointments();
@@ -211,6 +223,13 @@ const AdminPage = () => {
         title: "Data refreshed",
         description: "Admin dashboard data has been updated.",
       });
+      
+      if (usedDemoData) {
+        toast({
+          title: "Notice", 
+          description: "Still using demo data as real user data could not be fetched from Supabase.",
+        });
+      }
     } catch (error) {
       console.error("Error refreshing admin data:", error);
       toast({
@@ -233,12 +252,28 @@ const AdminPage = () => {
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-          <Button onClick={refreshAdminData} disabled={loading}>
+          <Button onClick={refreshAdminData} disabled={loading} className="gap-2">
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             {loading ? "Refreshing..." : "Refresh Data"}
           </Button>
         </div>
         
-        <Tabs defaultValue="appointments" className="space-y-6">
+        {usedDemoData && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+            <div className="flex">
+              <AlertTriangle className="h-6 w-6 text-yellow-400 mr-3" />
+              <div>
+                <p className="font-medium text-yellow-700">Using Demo Data</p>
+                <p className="text-sm text-yellow-600">
+                  Could not connect to Supabase to fetch real user data. Using demo data instead. 
+                  Please check your Supabase connection and refresh.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <Tabs defaultValue="overview" className="space-y-6">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="appointments">Appointments</TabsTrigger>
@@ -406,11 +441,16 @@ const AdminPage = () => {
           
           <TabsContent value="users">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
                   Registered Users
                 </CardTitle>
+                {usedDemoData && (
+                  <div className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                    Demo Data
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
                 <div className="h-[500px] overflow-auto">
@@ -442,6 +482,7 @@ const AdminPage = () => {
                                 <p className="text-lg font-medium">No registered users found</p>
                                 <p className="text-sm text-gray-500">User data will appear here once accounts are created.</p>
                               </div>
+                              <Button onClick={refreshAdminData}>Refresh Data</Button>
                             </div>
                           </TableCell>
                         </TableRow>

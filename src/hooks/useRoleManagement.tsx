@@ -177,7 +177,42 @@ export function useRoleManagement() {
       setLoading(true);
       console.log("Attempting to fetch real user data for admin");
       
-      // First, try to get user roles
+      // First try direct profiles + auth.users approach (most reliable if available)
+      try {
+        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+        
+        if (!authError && authUsers && authUsers.users && authUsers.users.length > 0) {
+          console.log("Successfully fetched auth users:", authUsers.users.length);
+          
+          // Get role data to supplement user info
+          const { data: roleData } = await supabase
+            .from('user_roles')
+            .select('*');
+            
+          // Map auth users to our format with roles
+          const mappedUsers = authUsers.users.map(authUser => {
+            // Find role for this user if available
+            const userRole = roleData?.find((r: any) => r.user_id === authUser.id);
+            
+            return {
+              id: authUser.id,
+              email: authUser.email || `user-${authUser.id.substring(0, 8)}@example.com`,
+              role: (userRole?.role as UserRole) || 'user'
+            };
+          });
+          
+          console.log("Mapped real users from auth.users:", mappedUsers.length);
+          setUsersWithEmails(mappedUsers);
+          setUsedDemoData(false);
+          setLoading(false);
+          return;
+        }
+      } catch (authError) {
+        console.error("Error fetching auth users:", authError);
+        // Continue with other approaches
+      }
+      
+      // Next try user_roles + profiles approach
       const { data: roleData, error: roleError } = await supabase
         .from('user_roles')
         .select('*');
@@ -225,7 +260,7 @@ export function useRoleManagement() {
         }
       }
       
-      // If we couldn't get combined data, try a different approach
+      // If we couldn't get combined data, try profiles only
       console.warn("Could not fetch combined user data, trying profiles only");
       
       const { data: profiles, error: profilesError } = await supabase
@@ -257,11 +292,35 @@ export function useRoleManagement() {
         return;
       }
       
+      // Try direct query to auth.users as a last resort (might work in certain permissions)
+      try {
+        const { data: directUsers, error: directError } = await supabase
+          .from('auth.users')
+          .select('id,email,created_at');
+          
+        if (!directError && directUsers && directUsers.length > 0) {
+          console.log("Successfully got users directly:", directUsers.length);
+          
+          const usersData = directUsers.map((user: any) => ({
+            id: user.id,
+            email: user.email || `user-${user.id.substring(0, 8)}@example.com`,
+            role: 'user' as UserRole
+          }));
+          
+          setUsersWithEmails(usersData);
+          setUsedDemoData(false);
+          setLoading(false);
+          return;
+        }
+      } catch (directError) {
+        console.error("Error with direct auth.users query:", directError);
+      }
+      
       // Try to create some sample data if nothing exists
       try {
         console.log("No users found in database, creating sample data");
         
-        // Create sample profiles with random IDs (important for TypeScript compatibility)
+        // Create sample profiles with random IDs
         const sampleProfiles = [
           { id: crypto.randomUUID(), first_name: 'Admin', last_name: 'User' },
           { id: crypto.randomUUID(), first_name: 'Manager', last_name: 'User' },
@@ -312,7 +371,7 @@ export function useRoleManagement() {
       
       // Add any missing special users
       const knownEmails = new Set(usersData.map(u => u.email.toLowerCase()));
-      if (user.email && !knownEmails.has(user.email.toLowerCase())) {
+      if (user?.email && !knownEmails.has(user.email.toLowerCase())) {
         // Add current user if not already in the list
         usersData.push({
           id: user.id,
@@ -333,11 +392,16 @@ export function useRoleManagement() {
       console.log("Using demo users with emails and roles:", usersData);
       setUsersWithEmails(usersData);
       setUsedDemoData(true);
+      toast({
+        title: "Using Demo Data",
+        description: "Could not fetch real user data from Supabase, using demo data instead.",
+        variant: "warning",
+      });
     } catch (error: any) {
       console.error('Error fetching users with emails:', error);
       toast({
         title: "Error",
-        description: "Failed to load user data",
+        description: "Failed to load user data from Supabase",
         variant: "destructive",
       });
       
